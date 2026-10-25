@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* Lewinsville palette: bright and bold. Marigold, saffron, rani pink, peacock, indigo on warm cream. */
+:root {
+  --cream: #fff6e9;
+  --ink: #1c1240;
+  --ink-soft: #4a4370;
+  --card: #ffffff;
+  --marigold: #ffb300;
+  --saffron: #f4511e;
+  --rani: #e91e63;
+  --peacock: #00897b;
+  --indigo: #3949ab;
+  --sky: #29b6f6;
+  --lime: #c0ca33;
+  --shadow: 0 10px 30px -12px rgba(28, 18, 64, 0.25);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --cream: #15102b; --ink: #fff3e0; --ink-soft: #c9c1e6; --card: #221a45; --shadow: 0 10px 30px -12px rgba(0,0,0,.6); }
+}
+@theme inline {
+  --color-cream: var(--cream);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-card: var(--card);
+  --color-marigold: var(--marigold);
+  --color-saffron: var(--saffron);
+  --color-rani: var(--rani);
+  --color-peacock: var(--peacock);
+  --color-indigo: var(--indigo);
+  --color-sky: var(--sky);
+  --color-lime: var(--lime);
+  --font-display: var(--font-sora), ui-sans-serif, system-ui;
+  --font-body: var(--font-manrope), ui-sans-serif, system-ui;
+}
+html, body { background: var(--cream); color: var(--ink); font-family: var(--font-body); -webkit-tap-highlight-color: transparent; }
+h1, h2, h3, .display { font-family: var(--font-display); letter-spacing: -0.02em; }
+.card { background: var(--card); border-radius: 1.5rem; box-shadow: var(--shadow); }
+.tile { border-radius: 1.25rem; padding: 0.9rem 1rem; text-align: left; transition: transform .08s ease, background .15s ease; user-select: none; }
+.tile:active { transform: scale(.97); }
+.jaali {
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(255,255,255,.18) 0 18%, transparent 19%),
+    radial-gradient(circle at 75% 75%, rgba(255,255,255,.18) 0 18%, transparent 19%);
+  background-size: 28px 28px;
+}
+input[type=range] { accent-color: var(--marigold); width: 100%; }
+.scroll-x { overflow-x: auto; scrollbar-width: none; } .scroll-x::-webkit-scrollbar { display: none; }
+@keyframes pulse { 0%,100% { opacity: .5 } 50% { opacity: 1 } } .pulse { animation: pulse 1.2s infinite; }

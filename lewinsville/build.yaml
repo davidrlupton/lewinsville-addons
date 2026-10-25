@@ -1,0 +1,2 @@
+build_from:
+  amd64: node:24-alpine

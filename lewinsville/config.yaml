@@ -1,0 +1,27 @@
+name: Lewinsville Portal
+version: "0.1.0"
+slug: lewinsville
+description: The family's app for the house, with the Claude house assistant. Served at lewinsville.vip through the Cloudflared tunnel.
+url: https://github.com/davidrlupton/Lewinsville
+arch: [amd64]
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+ports:
+  3000/tcp: 3000
+ports_description:
+  3000/tcp: Web app (the tunnel points here)
+options:
+  anthropic_api_key: ""
+  claude_model: claude-opus-5-5
+  people: []
+  dev_user_email: ""
+schema:
+  anthropic_api_key: password
+  claude_model: str
+  people:
+    - email: email
+      name: str
+      role: list(owner|household|guest)
+  dev_user_email: str?
