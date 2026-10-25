@@ -1,18 +1,35 @@
 "use client";
 import { useState } from "react";
-import type { Device } from "@/lib/house";
+import { supportsColor, type Device } from "@/lib/house";
 
 type Call = (body: Record<string, unknown>) => Promise<boolean>;
 export const FLOOR_COLOR: Record<string, string> = {
-  "First Floor": "var(--marigold)", "Second Floor": "var(--rani)", Loft: "var(--indigo)", Basement: "var(--peacock)", Exterior: "var(--saffron)",
+  "First Floor": "var(--floor-first)", "Second Floor": "var(--floor-second)", Loft: "var(--floor-loft)", Basement: "var(--floor-basement)", Exterior: "var(--floor-exterior)",
 };
+
+// Colour presets for the accent lights. hs = [hue, saturation]; k = kelvin for white light.
+export const COLORS: { name: string; hs?: [number, number]; k?: number; swatch: string }[] = [
+  { name: "Candle", k: 2000, swatch: "#ffb35c" }, { name: "Warm", k: 2700, swatch: "#ffd1a3" }, { name: "Bright", k: 4000, swatch: "#fff1e0" },
+  { name: "Amber", hs: [38, 100], swatch: "hsl(38 100% 55%)" }, { name: "Coral", hs: [12, 80], swatch: "hsl(12 80% 58%)" }, { name: "Rose", hs: [335, 70], swatch: "hsl(335 70% 60%)" },
+  { name: "Violet", hs: [272, 70], swatch: "hsl(272 70% 60%)" }, { name: "Blue", hs: [220, 85], swatch: "hsl(220 85% 58%)" }, { name: "Teal", hs: [176, 80], swatch: "hsl(176 80% 42%)" }, { name: "Green", hs: [120, 65], swatch: "hsl(120 65% 45%)" },
+];
+export function ColorRow({ ids, call, whiteOnly = false }: { ids: string[]; call: Call; whiteOnly?: boolean }) {
+  return (
+    <div className="scroll-x mt-2 flex gap-2 py-1">
+      {COLORS.filter((c) => !whiteOnly || c.k).map((c) => (
+        <button key={c.name} className="chip" title={c.name} aria-label={c.name} style={{ background: c.swatch }}
+          onClick={() => call(c.hs ? { entity_ids: ids, action: "set_color", hs: c.hs } : { entity_ids: ids, action: "set_color_temp", value: c.k })} />
+      ))}
+    </div>
+  );
+}
 
 export function LightTile({ d, call, color }: { d: Device; call: Call; color: string }) {
   const on = d.state === "on";
   const pct = typeof d.attrs.brightness === "number" ? Math.round(d.attrs.brightness / 2.55) : 100;
   const [drag, setDrag] = useState<number | null>(null);
   return (
-    <div className="tile" style={{ background: on ? color : "var(--card)", color: on ? "#1c1240" : "var(--ink)" }}>
+    <div className="tile" style={{ background: on ? `var(--on, ${color})` : "var(--card)", color: on ? "var(--on-ink)" : "var(--ink)" }}>
       <button className="flex w-full items-center justify-between gap-3" onClick={() => call({ entity_id: d.id, action: "toggle" })}>
         <span className="font-bold leading-tight">{d.name}</span>
         <span className="text-xs font-bold opacity-70">{on ? `${drag ?? pct}%` : "off"}</span>
@@ -23,6 +40,7 @@ export function LightTile({ d, call, color }: { d: Device; call: Call; color: st
           onPointerUp={() => { if (drag != null) { call({ entity_id: d.id, action: "set_brightness", value: drag }); setDrag(null); } }}
           className="mt-2" />
       )}
+      {on && supportsColor(d) && <ColorRow ids={[d.id]} call={call} />}
     </div>
   );
 }
@@ -30,7 +48,7 @@ export function LightTile({ d, call, color }: { d: Device; call: Call; color: st
 export function SwitchTile({ d, call, color }: { d: Device; call: Call; color: string }) {
   const on = d.state === "on";
   return (
-    <button className="tile flex w-full items-center justify-between" style={{ background: on ? color : "var(--card)", color: on ? "#1c1240" : "var(--ink)" }}
+    <button className="tile flex w-full items-center justify-between" style={{ background: on ? `var(--on, ${color})` : "var(--card)", color: on ? "var(--on-ink)" : "var(--ink)" }}
       onClick={() => call({ entity_id: d.id, action: "toggle" })}>
       <span className="font-bold">{d.name}</span><span className="text-xs font-bold opacity-70">{on ? "on" : "off"}</span>
     </button>

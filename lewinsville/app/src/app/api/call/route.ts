@@ -1,7 +1,7 @@
 // Button presses from the UI. Same allowlist as the agent's tools.
 import { act } from "@/lib/claude";
 import { hub } from "@/lib/ha";
-import { SCENES } from "@/lib/house";
+import { SCENES, ENTERTAIN } from "@/lib/house";
 import { personFrom } from "@/lib/identity";
 
 export async function POST(req: Request) {
@@ -14,9 +14,16 @@ export async function POST(req: Request) {
       await hub().callService("button", "press", {}, { entity_id: s.entity });
       return Response.json({ ok: true, did: `scene ${s.label}` });
     }
+    if (body.mood) {
+      const m = ENTERTAIN.moods[body.mood as string];
+      if (!m) return Response.json({ error: "unknown mood" }, { status: 400 });
+      await hub().callService("button", "press", {}, { entity_id: m.entity });
+      return Response.json({ ok: true, did: `mood ${m.label}` });
+    }
     const ids: string[] = Array.isArray(body.entity_ids) ? body.entity_ids : [body.entity_id];
+    const hs = Array.isArray(body.hs) && body.hs.length === 2 ? ([Number(body.hs[0]), Number(body.hs[1])] as [number, number]) : undefined;
     const out = [];
-    for (const id of ids) out.push(await act(id, body.action, body.value, body.hvac_mode));
+    for (const id of ids) out.push(await act(id, body.action, body.value, body.hvac_mode, hs));
     return Response.json({ ok: true, did: out });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 400 });

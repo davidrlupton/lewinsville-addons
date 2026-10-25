@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { House } from "@/lib/house";
 
-export type Me = { email: string; name: string; role: string; greeting: string; chat: boolean };
+export type Me = { email: string; name: string; role: string; theme: "festival" | "slate"; greeting: string; chat: boolean };
 
 export function useHouse() {
   const [house, setHouse] = useState<House | null>(null);

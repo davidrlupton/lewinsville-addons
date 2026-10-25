@@ -16,6 +16,10 @@ export const viewport: Viewport = { themeColor: "#ffb300", width: "device-width"
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${sora.variable} ${manrope.variable}`}>
+      <head>
+        {/* Apply the remembered look before first paint so the page never flashes the other one. */}
+        <script dangerouslySetInnerHTML={{ __html: 'try{var t=localStorage.getItem("lhh-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}' }} />
+      </head>
       <body className="min-h-dvh antialiased">{children}</body>
     </html>
   );

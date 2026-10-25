@@ -1,10 +1,14 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useHouse } from "@/components/useHouse";
 import { ClimateCard, DeviceTile, FLOOR_COLOR, MediaCard } from "@/components/Tiles";
 import { Chat } from "@/components/Chat";
+import { Entertain } from "@/components/Entertain";
 
-const TABS = [["home", "Home", "⌂"], ["rooms", "Rooms", "☼"], ["climate", "Climate", "°"], ["talk", "Talk", "✦"]] as const;
+const TABS = [["home", "Home", "⌂"], ["entertain", "Lounge", "♪"], ["rooms", "Rooms", "☼"], ["climate", "Climate", "°"], ["talk", "Talk", "✦"]] as const;
+type Theme = "festival" | "slate";
+function readSavedTheme(): Theme | null { try { const t = localStorage.getItem("lhh-theme"); return t === "slate" || t === "festival" ? t : null; } catch { return null; } }
+function subscribeTheme(cb: () => void) { window.addEventListener("lhh-theme", cb); window.addEventListener("storage", cb); return () => { window.removeEventListener("lhh-theme", cb); window.removeEventListener("storage", cb); }; }
 type Tab = (typeof TABS)[number][0];
 
 export default function Page() {
@@ -12,6 +16,15 @@ export default function Page() {
   const [tab, setTab] = useState<Tab>("home");
   const [room, setRoom] = useState<string | null>(null);
   const [armed, setArmed] = useState<string | null>(null);
+  // The look: the person's default from the server, overridden by whatever they last picked on this device.
+  const saved = useSyncExternalStore(subscribeTheme, readSavedTheme, () => null);
+  const theme: Theme | null = saved ?? me?.theme ?? null;
+  useEffect(() => {
+    if (!theme) return;
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "slate" ? "#f2f3f5" : "#ffb300");
+  }, [theme]);
+  const setTheme = (t: Theme) => { try { localStorage.setItem("lhh-theme", t); } catch {} window.dispatchEvent(new Event("lhh-theme")); };
   const confirmThen = (key: string, fn: () => void) => {
     if (armed === key) { setArmed(null); fn(); return; }
     setArmed(key); setTimeout(() => setArmed((a) => (a === key ? null : a)), 3000);
@@ -30,15 +43,18 @@ export default function Page() {
           <div className="text-sm font-bold uppercase tracking-widest text-ink-soft">Lewinsville</div>
           <h1 className="display text-3xl font-extrabold">{me?.greeting ?? "Hello"}</h1>
         </div>
-        {error && <span className="rounded-full bg-saffron/20 px-3 py-1 text-xs font-bold text-saffron">{error}</span>}
+        <div className="flex items-center gap-2">
+          {error && <span className="rounded-full bg-saffron/20 px-3 py-1 text-xs font-bold text-saffron">{error}</span>}
+          <button className="card h-9 w-9 text-base" aria-label="Switch look" title={theme === "slate" ? "Switch to colour" : "Switch to quiet"} onClick={() => setTheme(theme === "slate" ? "festival" : "slate")}>{theme === "slate" ? "◑" : "◐"}</button>
+        </div>
       </header>
 
       {tab === "home" && house && (
         <div className="space-y-5">
           <section>
             <div className="grid grid-cols-2 gap-3">
-              {([["welcome", "Welcome", "var(--marigold)"], ["day", "Day", "var(--sky)"], ["night", "Night", "var(--indigo)"], ["away", "Away", "var(--saffron)"]] as const).map(([k, l, c]) => (
-                <button key={k} className="tile jaali h-24 text-2xl font-extrabold text-white shadow-lg" style={{ background: c, outline: armed === k ? "4px solid var(--ink)" : "none" }} onClick={() => confirmThen(k, () => call({ scene: k }))}>{armed === k ? "Tap again" : l}</button>
+              {([["welcome", "Welcome"], ["day", "Day"], ["night", "Night"], ["away", "Away"]] as const).map(([k, l]) => (
+                <button key={k} className="scene jaali h-24 text-2xl font-extrabold text-white shadow-lg" style={{ background: `var(--scene-${k})`, outline: armed === k ? "4px solid var(--ink)" : "none" }} onClick={() => confirmThen(k, () => call({ scene: k }))}>{armed === k ? "Tap again" : l}</button>
               ))}
             </div>
           </section>
@@ -109,6 +125,8 @@ export default function Page() {
           })()}
         </div>
       )}
+
+      {tab === "entertain" && house && <Entertain house={house} call={call} />}
 
       {tab === "climate" && house && <div className="space-y-3">{climates.map((d) => <ClimateCard key={d.id} d={d} call={call} big />)}</div>}
 

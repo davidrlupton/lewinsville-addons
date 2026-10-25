@@ -7,13 +7,13 @@ Home Assistant stays the brain; this app is the face.
 
 | Piece | Where | What |
 |---|---|---|
-| `app/` | this repo | Next.js 16 (App Router, TypeScript, Tailwind v4). One page, four tabs: Home, Rooms, Climate, Talk. |
+| `app/` | this repo | Next.js 16 (App Router, TypeScript, Tailwind v4). One page, five tabs: Home, Lounge (the open-plan first floor: Kitchen-keypad moods, accent colours, every light by room, shades, screen and sound), Rooms, Climate, Talk. Two looks, `festival` (colour) and `slate` (quiet): default per person from the add-on options, switchable with the header button, remembered per device in localStorage, applied via `data-theme` on `<html>`. |
 | `addons/lewinsville/` | this repo → `/addons/lewinsville/` on the hub | Local Home Assistant add-on: Dockerfile builds the app, `run.sh` turns add-on options into env, Supervisor gives it `SUPERVISOR_TOKEN` for HA. |
 | Cloudflared add-on | hub | Tunnel `lewinsville`: lewinsville.vip and app.lewinsville.vip → this add-on (`http://90b47cbd-lewinsville:3000`), ha.lewinsville.vip → Home Assistant. Cloudflare Access (email allowlist, one-time code) in front of all three. |
 | `src/lib/ha.ts` | app | One WebSocket to HA (`ws://supervisor/core/websocket` in the add-on, `HA_URL` on a dev PC). Caches states and the area/floor/entity/device registries. |
 | `src/lib/house.ts` | app | Turns registries + states into rooms-by-floor with the devices a person cares about. Same model feeds the UI and Claude. |
-| `src/lib/identity.ts` | app | Who is using the app: `Cf-Access-Authenticated-User-Email` from Cloudflare Access, or `DEV_USER_EMAIL` on the LAN. |
-| `src/lib/claude.ts` | app | The agent: `claude-opus-5-5` via the Anthropic SDK tool runner with three tools, `list_house`, `control`, `set_scene`. Every action goes through `act()`, the same allowlist the buttons use. |
+| `src/lib/identity.ts` | app | Who is using the app: `Cf-Access-Authenticated-User-Email` from Cloudflare Access, or `DEV_USER_EMAIL` on the LAN. Name, role and default theme come from the add-on `people` list. |
+| `src/lib/claude.ts` | app | The agent: model from `CLAUDE_MODEL` (claude-sonnet-5-5 today) via the Anthropic SDK tool runner with four tools, `list_house`, `control` (incl. `set_color` with hs and `set_color_temp` in kelvin), `set_scene`, `set_mood`. Every action goes through `act()`, the same allowlist the buttons use. |
 | `/api/state` | app | Server-Sent Events: a full house snapshot, then a new one whenever HA changes anything. |
 | `/api/call` | app | Button presses → `act()` or a whole-house scene (Lutron keypad button). |
 | `/api/chat` | app | Streams the agent's reply; the browser keeps the transcript and sends it back each turn. |

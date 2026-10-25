@@ -12,7 +12,8 @@ export const FLOOR_ORDER = ["First Floor", "Second Floor", "Loft", "Basement", "
 const HIDE = /(_led$|crossfade|loudness|night_sound|speech_enhancement|status_light|surround|touch_controls|autoplay|^switch\.(master|basement|2nd_floor|living_room)$|^switch\.terminal_ssh|subwoofer|^media_player\.denon_living_2$|home_assistant_voice|jarvis)/;
 
 const KEEP = ["brightness", "color_temp_kelvin", "current_position", "current_temperature", "temperature", "hvac_action", "hvac_modes",
-  "current_humidity", "fan_mode", "media_title", "media_artist", "volume_level", "source", "source_list", "percentage", "min_temp", "max_temp", "supported_features"];
+  "current_humidity", "fan_mode", "media_title", "media_artist", "volume_level", "source", "source_list", "percentage", "min_temp", "max_temp", "supported_features",
+  "hs_color", "color_mode", "supported_color_modes", "min_color_temp_kelvin", "max_color_temp_kelvin"];
 function pick(a: Record<string, unknown>) { const o: Record<string, unknown> = {}; for (const k of KEEP) if (k in a) o[k] = a[k]; return o; }
 function shortName(full: string, room: string) {
   const n = full.startsWith(room + " ") ? full.slice(room.length + 1) : full;
@@ -55,6 +56,9 @@ export function describeHouse(house: House): string {
       out.push(`- ${r.name}: ` + r.devices.map((d) => {
         let s = d.state;
         if (d.domain === "light" && d.state === "on" && typeof d.attrs.brightness === "number") s += ` ${Math.round(d.attrs.brightness / 2.55)}%`;
+        if (d.domain === "light" && d.state === "on" && d.attrs.color_mode === "hs" && Array.isArray(d.attrs.hs_color)) s += ` hue ${Math.round((d.attrs.hs_color as number[])[0])} sat ${Math.round((d.attrs.hs_color as number[])[1])}`;
+        else if (d.domain === "light" && d.state === "on" && d.attrs.color_temp_kelvin) s += ` ${d.attrs.color_temp_kelvin}K`;
+        if (d.domain === "light" && (d.attrs.supported_color_modes as string[] | undefined)?.includes("hs")) s += ", colour-capable";
         if (d.domain === "cover" && d.attrs.current_position != null) s = `${d.attrs.current_position}% open`;
         if (d.domain === "climate") s = `${d.state}; ${d.attrs.current_temperature}°F now, set ${d.attrs.temperature}°F, ${d.attrs.hvac_action ?? "idle"}`;
         return `${d.name} [${d.id}] (${s})`;
@@ -70,6 +74,19 @@ export const NO_PARTIAL_COVERS = new Set(["cover.living_room_shade"]);
 export function partialAllowed(entity_id: string, position: number) {
   return !(NO_PARTIAL_COVERS.has(entity_id) && position > 0 && position < 100);
 }
+
+// The Entertain area: the open-plan first floor where the family actually lives. Its moods are the four
+// buttons on the Kitchen "At Column" keypad, programmed in Lutron, so the app and the wall agree.
+export const ENTERTAIN = {
+  rooms: ["Living Room", "Kitchen", "Dining Room", "Breakfast Room", "Foyer"],
+  moods: {
+    entertain: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_entertain", label: "Entertain" },
+    accent: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_accent", label: "Accent" },
+    night: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_night", label: "Night" },
+    shades: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_shades", label: "Shades" },
+  } as Record<string, { entity: string; label: string }>,
+};
+export function supportsColor(d: Device) { return ((d.attrs.supported_color_modes as string[] | undefined) ?? []).some((m) => m === "hs" || m === "rgb" || m === "xy"); }
 
 // Whole-house scenes are buttons on the Foyer keypad, programmed in Lutron.
 export const SCENES: Record<string, { entity: string; label: string }> = {
