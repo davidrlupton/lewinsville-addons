@@ -21,7 +21,7 @@ export default function Page() {
   const lightsOn = all.filter((d) => d.domain === "light" && d.state === "on");
   const covers = all.filter((d) => d.domain === "cover");
   const climates = all.filter((d) => d.domain === "climate");
-  const media = all.filter((d) => d.domain === "media_player" && d.state !== "off" && d.state !== "unavailable");
+  const media = all.filter((d) => d.domain === "media_player" && d.state === "playing");
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-xl flex-col px-4 pb-28 pt-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
