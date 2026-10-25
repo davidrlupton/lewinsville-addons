@@ -9,7 +9,7 @@ export type House = { floors: string[]; rooms: Room[]; updated: number };
 export const FLOOR_ORDER = ["First Floor", "Second Floor", "Loft", "Basement", "Exterior"];
 // Things that are controllable in HA but noise for a person: keypad LEDs, Sonos tuning switches,
 // the Airzone zone on/off switches (the thermostat card covers them), add-on switches.
-const HIDE = /(_led$|crossfade|loudness|night_sound|speech_enhancement|status_light|surround|touch_controls|autoplay|^switch\.(master|basement|2nd_floor|living_room)$|^switch\.terminal_ssh|subwoofer|^media_player\.denon_living_2$|home_assistant_voice)/;
+const HIDE = /(_led$|crossfade|loudness|night_sound|speech_enhancement|status_light|surround|touch_controls|autoplay|^switch\.(master|basement|2nd_floor|living_room)$|^switch\.terminal_ssh|subwoofer|^media_player\.denon_living_2$|home_assistant_voice|jarvis)/;
 
 const KEEP = ["brightness", "color_temp_kelvin", "current_position", "current_temperature", "temperature", "hvac_action", "hvac_modes",
   "current_humidity", "fan_mode", "media_title", "media_artist", "volume_level", "source", "source_list", "percentage", "min_temp", "max_temp", "supported_features"];
