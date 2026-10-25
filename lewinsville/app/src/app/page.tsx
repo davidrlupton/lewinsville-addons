@@ -46,7 +46,7 @@ export default function Page() {
             <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-extrabold">Shades</h2><span className="text-xs font-bold opacity-60">{covers.length} in the house</span></div>
             <div className="grid grid-cols-3 gap-2 font-bold">
               <button className="rounded-2xl bg-sky/25 py-3" onClick={() => confirmThen("open", () => call({ entity_ids: covers.map((c) => c.id), action: "open" }))}>{armed === "open" ? "Tap again" : "Open all"}</button>
-              <button className="rounded-2xl bg-ink/10 py-3" onClick={() => confirmThen("half", () => call({ entity_ids: covers.map((c) => c.id), action: "set_position", value: 50 }))}>{armed === "half" ? "Tap again" : "Halfway"}</button>
+              <button className="rounded-2xl bg-ink/10 py-3" onClick={() => confirmThen("half", () => call({ entity_ids: covers.filter((c) => c.id !== "cover.living_room_shade").map((c) => c.id), action: "set_position", value: 50 }))}>{armed === "half" ? "Tap again" : "Halfway"}</button>
               <button className="rounded-2xl bg-indigo/25 py-3" onClick={() => confirmThen("close", () => call({ entity_ids: covers.map((c) => c.id), action: "close" }))}>{armed === "close" ? "Tap again" : "Close all"}</button>
             </div>
           </section>

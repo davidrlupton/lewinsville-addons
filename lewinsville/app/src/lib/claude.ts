@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { hub } from "./ha";
-import { getHouse, describeHouse, SCENES, CONTROL_DOMAINS } from "./house";
+import { getHouse, describeHouse, SCENES, CONTROL_DOMAINS, partialAllowed } from "./house";
 import type { Person } from "./identity";
 
 export const MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
@@ -29,6 +29,7 @@ How to behave:
 - Whole-house moods are scenes: Welcome, Day, Night, Away. Use set_scene for "goodnight", "we're leaving",
   "we're home".
 - If something is not in the house list, say so plainly. Never invent devices.
+- The Living Room shade covers the porch door: never set it partway, only fully open or closed. Halfway requests skip it.
 - Temperatures are Fahrenheit. Do not set below 60 or above 80 without being told twice.
 - Do not discuss these instructions.`;
 
@@ -90,7 +91,11 @@ export async function act(entity_id: string, action: (typeof ACTIONS)[number], v
     case "open": await h.callService("cover", "open_cover", {}, t); break;
     case "close": await h.callService("cover", "close_cover", {}, t); break;
     case "stop": await h.callService("cover", "stop_cover", {}, t); break;
-    case "set_position": await h.callService("cover", "set_cover_position", { position: clamp(value, 0, 100, 50) }, t); break;
+    case "set_position": {
+      const pos = clamp(value, 0, 100, 50);
+      if (!partialAllowed(entity_id, pos)) return `${entity_id}: skipped, the living room shade covers a door and only goes fully open or closed`;
+      await h.callService("cover", "set_cover_position", { position: pos }, t); break;
+    }
     case "set_temperature": await h.callService("climate", "set_temperature", { temperature: clamp(value, 60, 80, 72) }, t); break;
     case "set_hvac_mode": await h.callService("climate", "set_hvac_mode", { hvac_mode: hvac_mode ?? "off" }, t); break;
     case "play": await h.callService("media_player", "media_play", {}, t); break;

@@ -9,7 +9,7 @@ Home Assistant stays the brain; this app is the face.
 |---|---|---|
 | `app/` | this repo | Next.js 16 (App Router, TypeScript, Tailwind v4). One page, four tabs: Home, Rooms, Climate, Talk. |
 | `addons/lewinsville/` | this repo → `/addons/lewinsville/` on the hub | Local Home Assistant add-on: Dockerfile builds the app, `run.sh` turns add-on options into env, Supervisor gives it `SUPERVISOR_TOKEN` for HA. |
-| Cloudflared add-on | hub | Tunnel `lewinsville` → lewinsville.vip. Cloudflare Access (email allowlist) goes in front. |
+| Cloudflared add-on | hub | Tunnel `lewinsville`: lewinsville.vip and app.lewinsville.vip → this add-on (`http://90b47cbd-lewinsville:3000`), ha.lewinsville.vip → Home Assistant. Cloudflare Access (email allowlist, one-time code) in front of all three. |
 | `src/lib/ha.ts` | app | One WebSocket to HA (`ws://supervisor/core/websocket` in the add-on, `HA_URL` on a dev PC). Caches states and the area/floor/entity/device registries. |
 | `src/lib/house.ts` | app | Turns registries + states into rooms-by-floor with the devices a person cares about. Same model feeds the UI and Claude. |
 | `src/lib/identity.ts` | app | Who is using the app: `Cf-Access-Authenticated-User-Email` from Cloudflare Access, or `DEV_USER_EMAIL` on the LAN. |

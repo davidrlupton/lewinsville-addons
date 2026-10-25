@@ -64,6 +64,13 @@ export function describeHouse(house: House): string {
   return out.join("\n");
 }
 
+// House rule (David, 2026-10-25): the Living Room shade covers the porch door, so it never goes to a
+// partial position. Fully open or fully closed only.
+export const NO_PARTIAL_COVERS = new Set(["cover.living_room_shade"]);
+export function partialAllowed(entity_id: string, position: number) {
+  return !(NO_PARTIAL_COVERS.has(entity_id) && position > 0 && position < 100);
+}
+
 // Whole-house scenes are buttons on the Foyer keypad, programmed in Lutron.
 export const SCENES: Record<string, { entity: string; label: string }> = {
   welcome: { entity: "button.foyer_foyer_inside_position_3_keypad_welcome", label: "Welcome" },
