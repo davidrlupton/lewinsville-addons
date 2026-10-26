@@ -7,6 +7,7 @@ import { hub } from "./ha";
 import { getHouse, describeHouse, SCENES, ENTERTAIN, CONTROL_DOMAINS, partialAllowed } from "./house";
 import type { Person } from "./identity";
 import { getEnergy, describeEnergy } from "./energy";
+import { note } from "./log";
 
 export const MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
 
@@ -78,6 +79,7 @@ export function tools(person: Person) {
     inputSchema: z.object({ scene: z.enum(["welcome", "day", "night", "away"]) }),
     run: async ({ scene }) => {
       await hub().callService("button", "press", {}, { entity_id: SCENES[scene].entity });
+      note(`scene ${SCENES[scene].label}`);
       return `Scene ${SCENES[scene].label} started.`;
     },
   });
@@ -88,6 +90,7 @@ export function tools(person: Person) {
     inputSchema: z.object({ mood: z.enum(["entertain", "accent", "night", "shades"]) }),
     run: async ({ mood }) => {
       await hub().callService("button", "press", {}, { entity_id: ENTERTAIN.moods[mood].entity });
+      note(`mood ${ENTERTAIN.moods[mood].label}`);
       return `Mood ${ENTERTAIN.moods[mood].label} started.`;
     },
   });
@@ -134,7 +137,9 @@ export async function act(entity_id: string, action: (typeof ACTIONS)[number], v
     case "next_track": await h.callService("media_player", "media_next_track", {}, t); break;
     case "volume_set": await h.callService("media_player", "volume_set", { volume_level: clamp(value, 0, 1, 0.3) }, t); break;
   }
-  return `${entity_id}: ${action}${value != null ? " " + value : ""}${hvac_mode ? " " + hvac_mode : ""} done`;
+  const done = `${entity_id}: ${action}${value != null ? " " + value : ""}${hvac_mode ? " " + hvac_mode : ""} done`;
+  note(done);
+  return done;
 }
 
 export type ChatMessage = Anthropic.Beta.BetaMessageParam;

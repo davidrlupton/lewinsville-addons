@@ -1,5 +1,5 @@
 name: Lewinsville Portal
-version: "0.1.8"
+version: "0.1.9"
 slug: lewinsville
 description: The family's app for the house, with the Claude house assistant. Served at lewinsville.vip through the Cloudflared tunnel.
 url: https://github.com/davidrlupton/Lewinsville
@@ -8,6 +8,8 @@ startup: application
 boot: auto
 init: false
 homeassistant_api: true
+map:
+  - share:rw
 # No host port on purpose: the only way in is the Cloudflare tunnel, which reaches the add-on by name
 # (http://90b47cbd-lewinsville:3000) on the Supervisor network. That keeps Access the sole front door.
 options:

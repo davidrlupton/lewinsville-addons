@@ -5,6 +5,7 @@ import { ClimateCard, DeviceTile, FLOOR_COLOR, MediaCard } from "@/components/Ti
 import { Chat } from "@/components/Chat";
 import { Entertain } from "@/components/Entertain";
 import { Energy } from "@/components/Energy";
+import { Log } from "@/components/Log";
 
 const TABS = [["home", "Home", "⌂"], ["entertain", "Lounge", "♪"], ["rooms", "Rooms", "☼"], ["energy", "Energy", "⚡"], ["climate", "Climate", "°"], ["talk", "Talk", "✦"]] as const;
 type Theme = "festival" | "slate";
@@ -17,6 +18,7 @@ export default function Page() {
   const [tab, setTab] = useState<Tab>("home");
   const [room, setRoom] = useState<string | null>(null);
   const [armed, setArmed] = useState<string | null>(null);
+  const [showLog, setShowLog] = useState(false);
   // The look: the person's default from the server, overridden by whatever they last picked on this device.
   const saved = useSyncExternalStore(subscribeTheme, readSavedTheme, () => null);
   const theme: Theme | null = saved ?? me?.theme ?? null;
@@ -133,7 +135,14 @@ export default function Page() {
 
       {tab === "climate" && house && <div className="space-y-3">{climates.map((d) => <ClimateCard key={d.id} d={d} call={call} big />)}</div>}
 
-      {tab === "talk" && <div className="h-[calc(100dvh-13rem)]"><Chat enabled={Boolean(me?.chat)} name={me?.name ?? "there"} /></div>}
+      {tab === "talk" && (
+        <div className="h-[calc(100dvh-13rem)]">
+          {me?.role === "owner" && (
+            <div className="mb-2 flex justify-end"><button className="rounded-full bg-ink/10 px-3 py-1 text-xs font-bold" onClick={() => setShowLog((v) => !v)}>{showLog ? "‹ Back to chat" : "History"}</button></div>
+          )}
+          {showLog && me?.role === "owner" ? <div className="h-full overflow-y-auto pb-4"><Log /></div> : <Chat enabled={Boolean(me?.chat)} name={me?.name ?? "there"} />}
+        </div>
+      )}
 
       {!house && !error && <div className="card p-6 text-center opacity-70">Waking the house…</div>}
 

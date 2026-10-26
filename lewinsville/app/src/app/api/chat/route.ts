@@ -2,6 +2,7 @@
 // Streams SSE: {text} deltas, then {done, content} with the assistant turn to append.
 import { chat, type ChatMessage } from "@/lib/claude";
 import { personFrom } from "@/lib/identity";
+import { append, withNotes } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -14,12 +15,19 @@ export async function POST(req: Request) {
   const enc = new TextEncoder();
   const stream = new ReadableStream({
     async start(ctrl) {
-      try {
-        for await (const ev of chat(person, messages.slice(-30))) ctrl.enqueue(enc.encode(`data: ${JSON.stringify(ev)}\n\n`));
-      } catch (e) {
-        ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ error: (e as Error).message })}\n\n`));
-      }
+      const t0 = Date.now(); let reply = ""; let ok = true;
+      const last = messages[messages.length - 1]?.content;
+      const asked = typeof last === "string" ? last : Array.isArray(last) ? last.map((b) => ("text" in b ? b.text : "")).join(" ") : "";
+      const did = await withNotes(async (did) => {
+        try {
+          for await (const ev of chat(person, messages.slice(-30))) { if ("text" in ev && ev.text) reply += ev.text; ctrl.enqueue(enc.encode(`data: ${JSON.stringify(ev)}\n\n`)); }
+        } catch (e) {
+          ok = false; ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ error: (e as Error).message })}\n\n`));
+        }
+        return did;
+      });
       ctrl.close();
+      void append({ source: "app", who: person.name, asked: asked.slice(0, 300), reply: reply.slice(0, 500), did, ms: Date.now() - t0, ok });
     },
   });
   return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform" } });
