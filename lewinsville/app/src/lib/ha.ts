@@ -82,6 +82,12 @@ class Hub {
     return haCallService(this.conn!, domain, service, data, target);
   }
 
+  /** Any websocket command (statistics, registries, ...). */
+  async send<T>(msg: { type: string } & Record<string, unknown>): Promise<T> {
+    await this.connect();
+    return this.conn!.sendMessagePromise<T>(msg);
+  }
+
   onChange(l: (e: HassEntities) => void) { this.listeners.add(l); return () => { this.listeners.delete(l); }; }
 }
 

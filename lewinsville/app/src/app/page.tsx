@@ -4,8 +4,9 @@ import { useHouse } from "@/components/useHouse";
 import { ClimateCard, DeviceTile, FLOOR_COLOR, MediaCard } from "@/components/Tiles";
 import { Chat } from "@/components/Chat";
 import { Entertain } from "@/components/Entertain";
+import { Energy } from "@/components/Energy";
 
-const TABS = [["home", "Home", "⌂"], ["entertain", "Lounge", "♪"], ["rooms", "Rooms", "☼"], ["climate", "Climate", "°"], ["talk", "Talk", "✦"]] as const;
+const TABS = [["home", "Home", "⌂"], ["entertain", "Lounge", "♪"], ["rooms", "Rooms", "☼"], ["energy", "Energy", "⚡"], ["climate", "Climate", "°"], ["talk", "Talk", "✦"]] as const;
 type Theme = "festival" | "slate";
 function readSavedTheme(): Theme | null { try { const t = localStorage.getItem("lhh-theme"); return t === "slate" || t === "festival" ? t : null; } catch { return null; } }
 function subscribeTheme(cb: () => void) { window.addEventListener("lhh-theme", cb); window.addEventListener("storage", cb); return () => { window.removeEventListener("lhh-theme", cb); window.removeEventListener("storage", cb); }; }
@@ -127,6 +128,8 @@ export default function Page() {
       )}
 
       {tab === "entertain" && house && <Entertain house={house} call={call} />}
+
+      {tab === "energy" && <Energy detail={me?.role === "owner"} />}
 
       {tab === "climate" && house && <div className="space-y-3">{climates.map((d) => <ClimateCard key={d.id} d={d} call={call} big />)}</div>}
 

@@ -17,6 +17,7 @@ Home Assistant stays the brain; this app is the face.
 | `/api/state` | app | Server-Sent Events: a full house snapshot, then a new one whenever HA changes anything. |
 | `/api/call` | app | Button presses → `act()` or a whole-house scene (Lutron keypad button). |
 | `/api/chat` | app | Streams the agent's reply; the browser keeps the transcript and sends it back each turn. |
+| `src/lib/energy.ts`, `/api/energy` | app | Whole-home energy: live power from the EP Cube sensors (summed across cubes by regex), kWh per circuit and per home from HA long-term statistics (`recorder/statistics_during_period`, change per hour/day). Ranges today/week/month/year; 30 s cache. The Energy tab shows the flow and totals to everyone, circuits and per-cube detail to owners only. The agent has `energy_report`. |
 
 ## Secrets
 

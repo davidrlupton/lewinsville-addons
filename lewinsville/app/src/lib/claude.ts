@@ -6,6 +6,7 @@ import { z } from "zod";
 import { hub } from "./ha";
 import { getHouse, describeHouse, SCENES, ENTERTAIN, CONTROL_DOMAINS, partialAllowed } from "./house";
 import type { Person } from "./identity";
+import { getEnergy, describeEnergy } from "./energy";
 
 export const MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
 
@@ -33,6 +34,7 @@ How to behave:
   "we're home".
 - If something is not in the house list, say so plainly. Never invent devices.
 - The Living Room shade covers the porch door: never set it partway, only fully open or closed. Halfway requests skip it.
+- For anything about electricity, solar, the battery or what is using power, call energy_report; quote kWh rounded to whole numbers.
 - Temperatures are Fahrenheit. Do not set below 60 or above 80 without being told twice.
 - Children may be using this app. Keep every answer suitable for a young child: no violence, horror, sex, drugs, alcohol,
   gambling, weapons, self-harm or adult themes; if a question needs any of that, say kindly that it is one for a parent.
@@ -90,8 +92,15 @@ export function tools(person: Person) {
     },
   });
 
+  const energy = betaZodTool({
+    name: "energy_report",
+    description: "Whole-home energy: solar, grid, battery and use, plus the top circuits, for today, this week, this month or this year. Use for any question about electricity use, solar, battery or what is drawing power.",
+    inputSchema: z.object({ range: z.enum(["today", "week", "month", "year"]).default("today") }),
+    run: async ({ range }) => describeEnergy(await getEnergy(range)),
+  });
+
   void person;
-  return [listHouse, control, setScene, setMood];
+  return [listHouse, control, setScene, setMood, energy];
 }
 
 export async function act(entity_id: string, action: (typeof ACTIONS)[number], value?: number, hvac_mode?: string, hs?: [number, number]): Promise<string> {
