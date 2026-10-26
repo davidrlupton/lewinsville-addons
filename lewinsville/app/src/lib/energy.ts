@@ -16,22 +16,23 @@ export type Energy = {
 };
 
 const TZ = "America/New_York";
-// Live power, one regex per quantity; a second cube shows up as the same name with a suffix.
+// The two EP Cubes are sensor.epcube_l_* and sensor.epcube_r_* (entity ids tidied 2026-10-25). Whole-home
+// numbers are the template sensors sensor.home_* on the hub (ha/templates.yaml), which add L and R.
 const LIVE = {
-  solar: /^sensor\.epcube\w*?solarpower(_\d+)?$/,
-  load: /^sensor\.epcube\w*?total_load_power(_\d+)?$/,
-  grid: /^sensor\.epcube\w*?_gridpower(_\d+)?$/,
-  battery: /^sensor\.epcube\w*?_batterypower(_\d+)?$/,
-  soc: /^sensor\.epcube\w*?_batterysoc(_\d+)?$/,
+  solar: /^sensor\.epcube_[lr]_solarpower$/,
+  load: /^sensor\.epcube_[lr]_total_load_power$/,
+  grid: /^sensor\.epcube_[lr]_gridpower$/,
+  battery: /^sensor\.epcube_[lr]_batterypower$/,
+  soc: /^sensor\.epcube_[lr]_batterysoc$/,
 };
-// Energy counters (kWh, total_increasing or daily totals; statistics "change" handles both).
+// Energy counters (kWh, daily totals; statistics "change" handles the midnight reset).
 const COUNTERS = {
-  solar: /^sensor\.epcube\w*?_solarelectricity(_\d+)?$/,
-  load: /^sensor\.epcube\w*?_total_load_energy(_\d+)?$/,
-  gridIn: /^sensor\.epcube\w*?_gridelectricityfrom(_\d+)?$/,
-  gridOut: /^sensor\.epcube\w*?_gridelectricityto(_\d+)?$/,
-  battIn: /^sensor\.epcube\w*?_battery_energy_in(_\d+)?$/,
-  battOut: /^sensor\.epcube\w*?_battery_energy_out(_\d+)?$/,
+  solar: /^sensor\.epcube_[lr]_solarelectricity$/,
+  load: /^sensor\.epcube_[lr]_total_load_energy$/,
+  gridIn: /^sensor\.epcube_[lr]_gridelectricityfrom$/,
+  gridOut: /^sensor\.epcube_[lr]_gridelectricityto$/,
+  battIn: /^sensor\.epcube_[lr]_battery_daily_charge$/,
+  battOut: /^sensor\.epcube_[lr]_battery_daily_discharge$/,
 };
 const CIRCUIT_POWER = /^sensor\.span_panel(_2)?_(?!main_meter|feed_through|current_power|solar)(.+)_power$/;
 
@@ -98,12 +99,12 @@ export async function getEnergy(range: Range): Promise<Energy> {
     return { label, load: +b.load.toFixed(1), solar: +b.solar.toFixed(1), gridIn: +b.gridIn.toFixed(1) };
   });
 
-  // Per-cube detail: group counters by the entity suffix (none = first cube, _2 = second).
-  const suffixes = [...new Set(counterIds.load.map((i) => (/_(\d+)$/.exec(i)?.[1] ?? "")))];
-  const cubes = suffixes.map((sfx, n) => {
-    const pick = (k: keyof typeof COUNTERS) => +counterIds[k].filter((i) => (/_(\d+)$/.exec(i)?.[1] ?? "") === sfx).reduce((s, id) => s + total(id), 0).toFixed(1);
-    const soc = socIds.find((i) => (/_(\d+)$/.exec(i)?.[1] ?? "") === sfx);
-    return { name: suffixes.length > 1 ? (n === 0 ? "Right cube" : "Left cube") : "EP Cube", solar: pick("solar"), load: pick("load"), gridIn: pick("gridIn"), gridOut: pick("gridOut"), soc: soc ? Math.round(num(ents[soc].state)) : null };
+  // Per-cube detail by side. L feeds the left SPAN panel, R the right (David, 2026-10-25).
+  const sides = (["l", "r"] as const).filter((s) => counterIds.load.some((i) => i.includes(`epcube_${s}_`)));
+  const cubes = sides.map((side) => {
+    const pick = (k: keyof typeof COUNTERS) => +counterIds[k].filter((i) => i.includes(`epcube_${side}_`)).reduce((s, id) => s + total(id), 0).toFixed(1);
+    const soc = socIds.find((i) => i.includes(`epcube_${side}_`));
+    return { name: side === "l" ? "Left cube" : "Right cube", solar: pick("solar"), load: pick("load"), gridIn: pick("gridIn"), gridOut: pick("gridOut"), soc: soc ? Math.round(num(ents[soc].state)) : null };
   });
 
   circuits.sort((a, b) => b.kwh - a.kwh || b.watts - a.watts);
