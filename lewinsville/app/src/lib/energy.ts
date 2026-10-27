@@ -1,31 +1,40 @@
 // Energy as the family wants to see it: the whole home first (both EP Cubes and both SPAN panels added
 // together), the parts only in detail. Live numbers come from HA state; history comes from HA's
 // long-term statistics, which it keeps forever at hourly resolution.
+// Totals are summed PER SENSOR from the per-cube daily counters, never from a summed template sensor:
+// the two cubes reset their daily counters a moment apart, which turns a summed counter into a false
+// jump at midnight (seen 2026-10-27).
 import { hub } from "./ha";
 
 export type Range = "today" | "week" | "month" | "year";
 export type Circuit = { id: string; name: string; panel: "Left" | "Right"; watts: number; kwh: number };
+export type Bucket = { t: number; label: string; load: number; solar: number; gridIn: number; gridOut: number; battIn: number; battOut: number; soc: number | null; has: boolean };
+export type Totals = { solar: number; load: number; gridIn: number; gridOut: number; battIn: number; battOut: number; self: number; selfPct: number | null };
+export type Cube = { name: string; soc: number | null; solar: number; load: number; gridIn: number; gridOut: number; battIn: number; battOut: number };
 export type Energy = {
   range: Range;
+  /** Label of the first bucket with data, when the range starts before the records do. */
+  since: string | null;
+  /** Watts. grid > 0 = buying, < 0 = selling. battery > 0 = charging, < 0 = giving power back. */
   live: { solar: number; load: number; grid: number; battery: number; soc: number | null; cubes: number };
-  totals: { solar: number; load: number; gridIn: number; gridOut: number; battIn: number; battOut: number };
-  series: { label: string; load: number; solar: number; gridIn: number }[];
+  totals: Totals;
+  series: Bucket[];
   circuits: Circuit[];
-  cubes: { name: string; solar: number; load: number; gridIn: number; gridOut: number; soc: number | null }[];
+  cubes: Cube[];
   updated: number;
 };
 
 const TZ = "America/New_York";
-// The two EP Cubes are sensor.epcube_l_* and sensor.epcube_r_* (entity ids tidied 2026-10-25). Whole-home
-// numbers are the template sensors sensor.home_* on the hub (ha/templates.yaml), which add L and R.
+// The two EP Cubes are sensor.epcube_l_* and sensor.epcube_r_* (entity ids tidied 2026-10-25).
 const LIVE = {
   solar: /^sensor\.epcube_[lr]_solarpower$/,
   load: /^sensor\.epcube_[lr]_total_load_power$/,
   grid: /^sensor\.epcube_[lr]_gridpower$/,
-  battery: /^sensor\.epcube_[lr]_batterypower$/,
+  // Reported in kW, positive = charging (checked against SOC history 2026-10-27). r_batterypower is a dead duplicate.
+  battery: /^sensor\.epcube_(l_batterypower|r_battery_power)$/,
   soc: /^sensor\.epcube_[lr]_batterysoc$/,
 };
-// Energy counters (kWh, daily totals; statistics "change" handles the midnight reset).
+// Daily kWh counters; statistics "change" handles the midnight reset (battery ones customised to total_increasing on the hub).
 const COUNTERS = {
   solar: /^sensor\.epcube_[lr]_solarelectricity$/,
   load: /^sensor\.epcube_[lr]_total_load_energy$/,
@@ -34,6 +43,8 @@ const COUNTERS = {
   battIn: /^sensor\.epcube_[lr]_battery_daily_charge$/,
   battOut: /^sensor\.epcube_[lr]_battery_daily_discharge$/,
 };
+type CounterKey = keyof typeof COUNTERS;
+const COUNTER_KEYS = Object.keys(COUNTERS) as CounterKey[];
 const CIRCUIT_POWER = /^sensor\.span_panel(_2)?_(?!main_meter|feed_through|current_power|solar)(.+)_power$/;
 
 function num(v: unknown) { const n = Number(v); return Number.isFinite(n) ? n : 0; }
@@ -44,15 +55,27 @@ function nyParts(d: Date) {
 /** Midnight in New York for the given instant, as a Date. */
 function startOfDayNY(d = new Date()) {
   const { y, m, d: day } = nyParts(d);
-  // Find the UTC instant whose NY wall clock is 00:00 on that date (handles DST by probing).
   let t = Date.UTC(y, m - 1, day, 5); // 05:00Z is midnight EST; adjust if DST
   const p = nyParts(new Date(t)); if (p.h !== 0) t -= p.h * 3600_000;
   return new Date(t);
 }
-function rangeStart(range: Range) {
+const fmt = (opts: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("en-US", { timeZone: TZ, ...opts });
+const LABEL: Record<Range, (t: number) => string> = {
+  today: (t) => { const h = nyParts(new Date(t)).h; return `${h % 12 || 12}${h < 12 ? "am" : "pm"}`; },
+  week: (t) => fmt({ weekday: "short" }).format(t),
+  month: (t) => fmt({ month: "numeric", day: "numeric" }).format(t),
+  year: (t) => fmt({ month: "short" }).format(t),
+};
+/** The bucket start instants for a range: 24 hours, 7 or 30 days, or 12 months, ending now. */
+function bucketStarts(range: Range): number[] {
   const mid = startOfDayNY();
-  const days = range === "today" ? 0 : range === "week" ? 6 : range === "month" ? 29 : 364;
-  return new Date(mid.getTime() - days * 86400_000);
+  if (range === "today") return Array.from({ length: 24 }, (_, h) => mid.getTime() + h * 3600_000);
+  if (range === "year") {
+    const { y, m } = nyParts(mid);
+    return Array.from({ length: 12 }, (_, i) => { let mm = m - 11 + i, yy = y; while (mm < 1) { mm += 12; yy--; } return startOfDayNY(new Date(Date.UTC(yy, mm - 1, 1, 12))).getTime(); });
+  }
+  const n = range === "week" ? 7 : 30;
+  return Array.from({ length: n }, (_, i) => startOfDayNY(new Date(mid.getTime() - (n - 1 - i) * 86400_000 + 43200_000)).getTime());
 }
 
 const cache = new Map<string, { at: number; v: Energy }>();
@@ -62,53 +85,61 @@ export async function getEnergy(range: Range): Promise<Energy> {
   const h = hub(); await h.connect(); await h.refreshRegistry();
   const ents = h.entities;
   const ids = Object.keys(ents);
-  const sum = (re: RegExp) => ids.filter((i) => re.test(i)).reduce((s, i) => s + num(ents[i].state), 0);
-  const socIds = ids.filter((i) => LIVE.soc.test(i));
+  const pick = (re: RegExp) => ids.filter((i) => re.test(i));
+  const sum = (re: RegExp, scale = 1) => pick(re).reduce((s, i) => s + num(ents[i].state) * scale, 0);
+  const socIds = pick(LIVE.soc);
+  const socOf = (list: string[]) => (list.length ? Math.round(list.reduce((s, i) => s + num(ents[i].state), 0) / list.length) : null);
   const live = {
-    solar: sum(LIVE.solar), load: sum(LIVE.load), grid: sum(LIVE.grid), battery: sum(LIVE.battery),
-    soc: socIds.length ? Math.round(socIds.reduce((s, i) => s + num(ents[i].state), 0) / socIds.length) : null,
-    cubes: ids.filter((i) => LIVE.load.test(i)).length,
+    solar: Math.round(sum(LIVE.solar)), load: Math.round(sum(LIVE.load)), grid: Math.round(sum(LIVE.grid)), battery: Math.round(sum(LIVE.battery, 1000)),
+    soc: socOf(socIds), cubes: pick(LIVE.load).length,
   };
 
-  // Circuits: live watts from state, kWh from statistics on the matching consumed_energy counter.
-  const circuitIds = ids.filter((i) => CIRCUIT_POWER.test(i));
-  const circuits: Circuit[] = circuitIds.map((i) => {
+  // Circuits: live watts from state, kWh from statistics on the matching consumed_energy counter (Wh).
+  const circuits: Circuit[] = pick(CIRCUIT_POWER).map((i) => {
     const m = CIRCUIT_POWER.exec(i)!;
     const name = String(ents[i].attributes.friendly_name ?? i).replace(/^(Span Panel( 2)?|SPAN (Left|Right)) /, "").replace(/ Power$/, "");
     return { id: i.replace(/_power$/, "_consumed_energy"), name, panel: m[1] ? "Right" : "Left", watts: Math.round(num(ents[i].state)), kwh: 0 };
   });
 
-  const counterIds = Object.fromEntries(Object.entries(COUNTERS).map(([k, re]) => [k, ids.filter((i) => re.test(i))])) as Record<keyof typeof COUNTERS, string[]>;
-  const statIds = [...circuits.map((c) => c.id), ...Object.values(counterIds).flat()];
-  const start = rangeStart(range);
-  const period = range === "today" ? "hour" : "day";
-  type Row = { start: number; change: number | null };
-  const stats = await h.send<Record<string, Row[]>>({ type: "recorder/statistics_during_period", start_time: start.toISOString(), statistic_ids: statIds, period, types: ["change"] });
-  const total = (id: string) => (stats[id] ?? []).reduce((s, r) => s + (r.change ?? 0), 0);
-  for (const c of circuits) c.kwh = +(total(c.id) / 1000).toFixed(2); // SPAN counts Wh
-  const tot = (k: keyof typeof COUNTERS) => +counterIds[k].reduce((s, id) => s + total(id), 0).toFixed(1);
-  const totals = { solar: tot("solar"), load: tot("load"), gridIn: tot("gridIn"), gridOut: tot("gridOut"), battIn: tot("battIn"), battOut: tot("battOut") };
-
-  // Series per bucket for the little chart: hours today, days otherwise.
-  const buckets = new Map<number, { load: number; solar: number; gridIn: number }>();
-  const add = (k: "load" | "solar" | "gridIn") => { for (const id of counterIds[k]) for (const r of stats[id] ?? []) { const b = buckets.get(r.start) ?? { load: 0, solar: 0, gridIn: 0 }; b[k] += r.change ?? 0; buckets.set(r.start, b); } };
-  add("load"); add("solar"); add("gridIn");
-  const series = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([t, b]) => {
-    const p = nyParts(new Date(t));
-    const label = period === "hour" ? `${p.h}` : range === "year" ? `${p.m}/${p.d}` : `${p.m}/${p.d}`;
-    return { label, load: +b.load.toFixed(1), solar: +b.solar.toFixed(1), gridIn: +b.gridIn.toFixed(1) };
+  const counterIds = Object.fromEntries(COUNTER_KEYS.map((k) => [k, pick(COUNTERS[k])])) as Record<CounterKey, string[]>;
+  const starts = bucketStarts(range);
+  const period = range === "today" ? "hour" : range === "year" ? "month" : "day";
+  type Row = { start: number; change?: number | null; mean?: number | null };
+  const stats = await h.send<Record<string, Row[]>>({
+    type: "recorder/statistics_during_period", start_time: new Date(starts[0]).toISOString(),
+    statistic_ids: [...circuits.map((c) => c.id), ...Object.values(counterIds).flat(), ...socIds], period, types: ["change", "mean"],
   });
+  // A daily counter's reset shows as a negative change in older rows; a counter never really goes backwards.
+  const change = (r: Row) => Math.max(0, r.change ?? 0);
+  const total = (id: string) => (stats[id] ?? []).reduce((s, r) => s + change(r), 0);
+  const bucketOf = (t: number) => { let b = -1; for (let i = 0; i < starts.length && starts[i] <= t; i++) b = i; return b; };
+
+  for (const c of circuits) c.kwh = +(total(c.id) / 1000).toFixed(2);
+
+  const series: Bucket[] = starts.map((t) => ({ t, label: LABEL[range](t), load: 0, solar: 0, gridIn: 0, gridOut: 0, battIn: 0, battOut: 0, soc: null, has: false }));
+  for (const k of COUNTER_KEYS) for (const id of counterIds[k]) for (const r of stats[id] ?? []) {
+    const b = bucketOf(r.start); if (b < 0) continue;
+    series[b][k] += change(r); if (r.change != null) series[b].has = true;
+  }
+  const socAcc = series.map(() => ({ s: 0, n: 0 }));
+  for (const id of socIds) for (const r of stats[id] ?? []) { const b = bucketOf(r.start); if (b >= 0 && r.mean != null) { socAcc[b].s += r.mean; socAcc[b].n++; } }
+  series.forEach((s, i) => { for (const k of COUNTER_KEYS) s[k] = +s[k].toFixed(2); s.soc = socAcc[i].n ? Math.round(socAcc[i].s / socAcc[i].n) : null; });
+
+  const t = (k: CounterKey) => +series.reduce((s, b) => s + b[k], 0).toFixed(1);
+  const load = t("load"), gridIn = t("gridIn");
+  const self = +Math.max(0, load - gridIn).toFixed(1);
+  const totals: Totals = { solar: t("solar"), load, gridIn, gridOut: t("gridOut"), battIn: t("battIn"), battOut: t("battOut"), self, selfPct: load > 0 ? Math.round((self / load) * 100) : null };
+  const first = series.findIndex((b) => b.has);
+  const since = first > 0 ? series[first].label : null;
 
   // Per-cube detail by side. L feeds the left SPAN panel, R the right (David, 2026-10-25).
-  const sides = (["l", "r"] as const).filter((s) => counterIds.load.some((i) => i.includes(`epcube_${s}_`)));
-  const cubes = sides.map((side) => {
-    const pick = (k: keyof typeof COUNTERS) => +counterIds[k].filter((i) => i.includes(`epcube_${side}_`)).reduce((s, id) => s + total(id), 0).toFixed(1);
-    const soc = socIds.find((i) => i.includes(`epcube_${side}_`));
-    return { name: side === "l" ? "Left cube" : "Right cube", solar: pick("solar"), load: pick("load"), gridIn: pick("gridIn"), gridOut: pick("gridOut"), soc: soc ? Math.round(num(ents[soc].state)) : null };
+  const cubes: Cube[] = (["l", "r"] as const).filter((s) => counterIds.load.some((i) => i.includes(`epcube_${s}_`))).map((side) => {
+    const of = (k: CounterKey) => +counterIds[k].filter((i) => i.includes(`epcube_${side}_`)).reduce((s, id) => s + total(id), 0).toFixed(1);
+    return { name: side === "l" ? "Left cube" : "Right cube", soc: socOf(socIds.filter((i) => i.includes(`epcube_${side}_`))), solar: of("solar"), load: of("load"), gridIn: of("gridIn"), gridOut: of("gridOut"), battIn: of("battIn"), battOut: of("battOut") };
   });
 
   circuits.sort((a, b) => b.kwh - a.kwh || b.watts - a.watts);
-  const v: Energy = { range, live, totals, series, circuits, cubes, updated: Date.now() };
+  const v: Energy = { range, since, live, totals, series, circuits, cubes, updated: Date.now() };
   cache.set(range, { at: Date.now(), v });
   return v;
 }
@@ -116,6 +147,7 @@ export async function getEnergy(range: Range): Promise<Energy> {
 /** Short text for the model. */
 export function describeEnergy(e: Energy) {
   const top = e.circuits.slice(0, 10).map((c) => `${c.name} (${c.panel}) ${c.kwh} kWh, ${c.watts} W now`).join("; ");
-  return `Energy, ${e.range}: home used ${e.totals.load} kWh, solar made ${e.totals.solar} kWh, grid import ${e.totals.gridIn} kWh, export ${e.totals.gridOut} kWh, battery charged ${e.totals.battIn} / discharged ${e.totals.battOut} kWh. ` +
-    `Right now: solar ${e.live.solar} W, home ${e.live.load} W, grid ${e.live.grid} W, battery ${e.live.battery} W at ${e.live.soc ?? "?"}%. Top circuits: ${top}.`;
+  const bat = e.live.battery > 50 ? `charging at ${e.live.battery} W` : e.live.battery < -50 ? `giving ${-e.live.battery} W` : "idle";
+  return `Energy, ${e.range}${e.since ? ` (records start ${e.since})` : ""}: home used ${e.totals.load} kWh, of which ${e.totals.self} kWh (${e.totals.selfPct ?? "?"}%) came from our own sun and battery; sun made ${e.totals.solar} kWh; bought ${e.totals.gridIn} kWh from the grid, sold ${e.totals.gridOut} kWh; battery charged ${e.totals.battIn} kWh, gave back ${e.totals.battOut} kWh. ` +
+    `Right now: sun ${e.live.solar} W, home using ${e.live.load} W, grid ${e.live.grid >= 0 ? "buying" : "selling"} ${Math.abs(e.live.grid)} W, battery ${e.live.soc ?? "?"}% ${bat}. Top circuits: ${top}.`;
 }
