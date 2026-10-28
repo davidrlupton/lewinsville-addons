@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { Entry } from "@/lib/log";
 
-const BADGE: Record<Entry["source"], [string, string]> = { jarvis: ["♪", "Jarvis"], app: ["✦", "Talk"], button: ["⌂", "Button"] };
+const BADGE: Record<Entry["source"], [string, string]> = { jarvis: ["♪", "Teddy"], app: ["✦", "Talk"], button: ["⌂", "Button"] };
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -25,7 +25,7 @@ export function Log() {
         <div><span className="font-extrabold">{entries.length}</span> asks · <span className="font-extrabold">{entries.filter((e) => e.source === "jarvis").length}</span> by voice · typical reply <span className="font-extrabold">{(med / 1000).toFixed(1)}s</span>{flagged ? <> · <span className="font-extrabold text-saffron">{flagged} flagged</span></> : null}</div>
         <div className="flex gap-1 text-xs font-bold">{[7, 14, 30].map((d) => <button key={d} className="rounded-full px-2.5 py-1" style={{ background: days === d ? "var(--ink)" : "var(--cream)", color: days === d ? "var(--cream)" : "var(--ink)" }} onClick={() => setDays(d)}>{d}d</button>)}</div>
       </div>
-      {entries.length === 0 && <div className="card p-4 text-sm opacity-70">Nothing yet. Ask Jarvis something.</div>}
+      {entries.length === 0 && <div className="card p-4 text-sm opacity-70">Nothing yet. Ask Teddy something.</div>}
       {entries.map((e, i) => {
         const d = fmtDay(e.at); const head = i === 0 || fmtDay(entries[i - 1].at) !== d;
         const [icon, label] = BADGE[e.source];
