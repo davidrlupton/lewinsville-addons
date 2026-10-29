@@ -5,6 +5,7 @@ import { ClimateCard, DeviceTile, FLOOR_COLOR, MediaCard } from "@/components/Ti
 import { Chat } from "@/components/Chat";
 import { Entertain } from "@/components/Entertain";
 import { Energy } from "@/components/Energy";
+import { Sounds } from "@/components/Sounds";
 import { Log } from "@/components/Log";
 
 const TABS = [["home", "Home", "⌂"], ["entertain", "Lounge", "♪"], ["rooms", "Rooms", "☼"], ["energy", "Energy", "⚡"], ["climate", "Climate", "°"], ["talk", "Talk", "✦"]] as const;
@@ -89,6 +90,7 @@ export default function Page() {
             </div>
           </section>
           {media.length > 0 && <section><h2 className="mb-2 text-lg font-extrabold">Playing</h2><div className="space-y-2">{media.map((d) => <MediaCard key={d.id} d={d} call={call} />)}</div></section>}
+          <Sounds me={me} />
         </div>
       )}
 

@@ -9,7 +9,7 @@ RUN npm run build
 
 FROM node:24-alpine
 WORKDIR /app
-RUN apk add --no-cache jq
+RUN apk add --no-cache jq ffmpeg
 COPY --from=build /src/.next/standalone ./
 COPY --from=build /src/.next/static ./.next/static
 COPY --from=build /src/public ./public
