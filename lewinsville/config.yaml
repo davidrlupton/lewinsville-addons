@@ -1,5 +1,5 @@
 name: Lewinsville Portal
-version: "0.1.11"
+version: "0.1.12"
 slug: lewinsville
 description: The family's app for the house, with the Claude house assistant. Served at lewinsville.vip through the Cloudflared tunnel.
 url: https://github.com/davidrlupton/Lewinsville
@@ -17,6 +17,8 @@ options:
   claude_model: claude-opus-5-5
   people: []
   dev_user_email: ""
+  # Dominion's all-in residential price in cents per kWh, for the Energy tab's dollar estimate. 0 hides it.
+  energy_rate_cents: 14
 schema:
   anthropic_api_key: password
   claude_model: str
@@ -26,3 +28,4 @@ schema:
       role: list(owner|household|guest)
       theme: list(festival|slate)?
   dev_user_email: str?
+  energy_rate_cents: float?

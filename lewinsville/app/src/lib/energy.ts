@@ -9,7 +9,8 @@ import { hub } from "./ha";
 export type Range = "today" | "week" | "month" | "year";
 export type Circuit = { id: string; name: string; panel: "Left" | "Right"; watts: number; kwh: number };
 export type Bucket = { t: number; label: string; load: number; solar: number; gridIn: number; gridOut: number; battIn: number; battOut: number; soc: number | null; has: boolean };
-export type Totals = { solar: number; load: number; gridIn: number; gridOut: number; battIn: number; battOut: number; self: number; selfPct: number | null };
+/** net = bought - sold. Under Dominion net metering a kWh sold cancels a kWh bought within the 12-month netting period, so net is what the bill sees. cost is an estimate from ENERGY_RATE_CENTS (null when no rate is set). */
+export type Totals = { solar: number; load: number; gridIn: number; gridOut: number; battIn: number; battOut: number; self: number; selfPct: number | null; net: number; rateCents: number | null; cost: number | null };
 export type Cube = { name: string; soc: number | null; solar: number; load: number; gridIn: number; gridOut: number; battIn: number; battOut: number };
 export type Energy = {
   range: Range;
@@ -128,7 +129,9 @@ export async function getEnergy(range: Range): Promise<Energy> {
   const t = (k: CounterKey) => +series.reduce((s, b) => s + b[k], 0).toFixed(1);
   const load = t("load"), gridIn = t("gridIn");
   const self = +Math.max(0, load - gridIn).toFixed(1);
-  const totals: Totals = { solar: t("solar"), load, gridIn, gridOut: t("gridOut"), battIn: t("battIn"), battOut: t("battOut"), self, selfPct: load > 0 ? Math.round((self / load) * 100) : null };
+  const gridOut = t("gridOut"), net = +(gridIn - gridOut).toFixed(1);
+  const rateCents = Number(process.env.ENERGY_RATE_CENTS) > 0 ? Number(process.env.ENERGY_RATE_CENTS) : null;
+  const totals: Totals = { solar: t("solar"), load, gridIn, gridOut, battIn: t("battIn"), battOut: t("battOut"), self, selfPct: load > 0 ? Math.round((self / load) * 100) : null, net, rateCents, cost: rateCents ? +((net * rateCents) / 100).toFixed(2) : null };
   const first = series.findIndex((b) => b.has);
   const since = first > 0 ? series[first].label : null;
 
@@ -148,6 +151,6 @@ export async function getEnergy(range: Range): Promise<Energy> {
 export function describeEnergy(e: Energy) {
   const top = e.circuits.slice(0, 10).map((c) => `${c.name} (${c.panel}) ${c.kwh} kWh, ${c.watts} W now`).join("; ");
   const bat = e.live.battery > 50 ? `charging at ${e.live.battery} W` : e.live.battery < -50 ? `giving ${-e.live.battery} W` : "idle";
-  return `Energy, ${e.range}${e.since ? ` (records start ${e.since})` : ""}: home used ${e.totals.load} kWh, of which ${e.totals.self} kWh (${e.totals.selfPct ?? "?"}%) came from our own sun and battery; sun made ${e.totals.solar} kWh; bought ${e.totals.gridIn} kWh from the grid, sold ${e.totals.gridOut} kWh; battery charged ${e.totals.battIn} kWh, gave back ${e.totals.battOut} kWh. ` +
+  return `Energy, ${e.range}${e.since ? ` (records start ${e.since})` : ""}: home used ${e.totals.load} kWh, of which ${e.totals.self} kWh (${e.totals.selfPct ?? "?"}%) came from our own sun and battery; sun made ${e.totals.solar} kWh; bought ${e.totals.gridIn} kWh from the grid, sold ${e.totals.gridOut} kWh, net ${e.totals.net} kWh from Dominion (net metering: sold cancels bought over the year)${e.totals.cost != null ? `, about $${e.totals.cost} at ${e.totals.rateCents} cents per kWh` : ""}; battery charged ${e.totals.battIn} kWh, gave back ${e.totals.battOut} kWh. ` +
     `Right now: sun ${e.live.solar} W, home using ${e.live.load} W, grid ${e.live.grid >= 0 ? "buying" : "selling"} ${Math.abs(e.live.grid)} W, battery ${e.live.soc ?? "?"}% ${bat}. Top circuits: ${top}.`;
 }

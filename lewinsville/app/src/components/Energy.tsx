@@ -52,6 +52,14 @@ export function Energy({ detail }: { detail: boolean }) {
             <div key={k}><div className="display text-xl font-extrabold" style={{ color: c }}>{kwh(v)}</div><div className="text-[10px] font-bold uppercase opacity-60">{k}</div></div>
           ))}
         </div>
+        {e.totals.load > 0 && (
+          <div className="mt-3 rounded-xl px-3 py-2 text-sm" style={{ background: "var(--cream)" }}>
+            {e.totals.net >= 0
+              ? <>Sold cancels bought, so Dominion counts <b>{kwh(e.totals.net)} kWh</b> net{e.totals.cost != null && <>, about <b>${e.totals.cost.toFixed(2)}</b></>}.</>
+              : <>We sent back <b>{kwh(-e.totals.net)} kWh</b> more than we bought{e.totals.cost != null && <>, a credit of about <b>${(-e.totals.cost).toFixed(2)}</b></>}.</>}
+            <span className="ml-1 text-xs opacity-60">{e.totals.rateCents != null ? `At ${e.totals.rateCents}¢ per kWh, an estimate; fixed charges not included.` : "Net metering: a kWh sold cancels a kWh bought."}</span>
+          </div>
+        )}
         <Chart series={e.series} range={e.range} />
         {e.since && <div className="mt-2 text-xs opacity-60">Records start {e.since}.</div>}
         {e.live.cubes < 2 && <div className="mt-2 text-xs opacity-60">Only one EP Cube is reporting, so these are half the house.</div>}
@@ -116,9 +124,11 @@ function Flow({ live }: { live: E["live"] }) {
   );
 }
 
-/** Bars of what the house used (gold = our own, grey = bought), with a thin line for what the sun made. */
+/** Bars of what the house used (gold = our own, grey = bought) with a thin line for what the sun made; below the axis, what went back to the grid. */
 function Chart({ series, range }: { series: Bucket[]; range: Range }) {
   const max = Math.max(0.1, ...series.map((s) => Math.max(s.load, s.solar)));
+  const maxOut = Math.max(0.1, ...series.map((s) => s.gridOut));
+  const anySold = series.some((s) => s.gridOut > 0);
   const n = series.length;
   const nowIdx = range === "today" ? series.filter((s) => s.has).length : n;
   const ticks = range === "today" ? [0, 6, 12, 18] : range === "week" ? series.map((_, i) => i) : range === "month" ? series.map((_, i) => i).filter((i) => i % 7 === n % 7 - 1 || i === n - 1) : series.map((_, i) => i);
@@ -130,7 +140,7 @@ function Chart({ series, range }: { series: Bucket[]; range: Range }) {
           {series.map((s, i) => {
             const self = Math.max(0, s.load - s.gridIn), bought = Math.min(s.load, s.gridIn);
             return (
-              <div key={s.t} className="flex h-full flex-1 flex-col justify-end" style={{ opacity: i >= nowIdx ? .35 : 1 }} title={`${s.label}: used ${s.load} kWh (${self.toFixed(1)} ours, ${bought.toFixed(1)} bought), sun ${s.solar} kWh`}>
+              <div key={s.t} className="flex h-full flex-1 flex-col justify-end" style={{ opacity: i >= nowIdx ? .35 : 1 }} title={`${s.label}: used ${s.load} kWh (${self.toFixed(1)} ours, ${bought.toFixed(1)} bought), sun ${s.solar} kWh, sold ${s.gridOut} kWh`}>
                 <div style={{ height: `${(self / max) * 100}%`, background: SUN, borderRadius: "2px 2px 0 0" }} />
                 <div style={{ height: `${(bought / max) * 100}%`, background: BOUGHT, opacity: .45, borderRadius: self > 0 ? 0 : "2px 2px 0 0" }} />
               </div>
@@ -141,6 +151,13 @@ function Chart({ series, range }: { series: Bucket[]; range: Range }) {
           <polyline points={pts} fill="none" stroke="var(--ink)" strokeWidth={1.5} strokeOpacity={.55} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
         </svg>
       </div>
+      {anySold && (
+        <div className="flex h-7 items-start gap-[2px]" style={{ borderTop: "1px solid var(--ink)" }} aria-label="Sold back to the grid">
+          {series.map((s, i) => (
+            <div key={s.t} className="flex-1" style={{ height: `${(s.gridOut / maxOut) * 100}%`, background: GRID, opacity: i >= nowIdx ? .25 : .7, borderRadius: "0 0 2px 2px" }} title={`${s.label}: sold ${s.gridOut} kWh`} />
+          ))}
+        </div>
+      )}
       <div className="relative mt-1 h-4 text-[10px] font-bold opacity-50">
         {ticks.map((i) => <span key={i} className={`absolute ${i === 0 ? "" : i === n - 1 ? "-translate-x-full" : "-translate-x-1/2"}`} style={{ left: `${((i + (i === 0 ? 0 : i === n - 1 ? 1 : 0.5)) / n) * 100}%` }}>{series[i].label}</span>)}
       </div>
@@ -148,6 +165,7 @@ function Chart({ series, range }: { series: Bucket[]; range: Range }) {
         <span><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: SUN }} />our own</span>
         <span><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: BOUGHT, opacity: .45 }} />bought</span>
         <span><i className="mr-1 inline-block w-3 border-t border-dashed align-middle" style={{ borderColor: "var(--ink)" }} />sun made</span>
+        {anySold && <span><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: GRID, opacity: .7 }} />sold, below the line</span>}
       </div>
     </div>
   );
