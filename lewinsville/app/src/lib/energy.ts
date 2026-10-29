@@ -36,6 +36,10 @@ const LIVE = {
   soc: /^sensor\.epcube_[lr]_batterysoc$/,
 };
 // Daily kWh counters; statistics "change" handles the midnight reset (battery ones customised to total_increasing on the hub).
+// Grid in/out: the per-cube counters double count whenever one cube exports while the other imports (the utility
+// meter sees only the difference; Dominion's Sep-Oct 2026 bill proved it). The whole-home Riemann-sum helpers
+// HOME_GRID are right and are preferred for every bucket where they have data (they start 2026-10-29).
+const HOME_GRID = { gridIn: "sensor.home_grid_import_energy", gridOut: "sensor.home_grid_export_energy" } as const;
 const COUNTERS = {
   solar: /^sensor\.epcube_[lr]_solarelectricity$/,
   load: /^sensor\.epcube_[lr]_total_load_energy$/,
@@ -108,7 +112,7 @@ export async function getEnergy(range: Range): Promise<Energy> {
   type Row = { start: number; change?: number | null; mean?: number | null };
   const stats = await h.send<Record<string, Row[]>>({
     type: "recorder/statistics_during_period", start_time: new Date(starts[0]).toISOString(),
-    statistic_ids: [...circuits.map((c) => c.id), ...Object.values(counterIds).flat(), ...socIds], period, types: ["change", "mean"],
+    statistic_ids: [...circuits.map((c) => c.id), ...Object.values(counterIds).flat(), ...Object.values(HOME_GRID), ...socIds], period, types: ["change", "mean"],
   });
   // A daily counter's reset shows as a negative change in older rows; a counter never really goes backwards.
   const change = (r: Row) => Math.max(0, r.change ?? 0);
@@ -118,8 +122,15 @@ export async function getEnergy(range: Range): Promise<Energy> {
   for (const c of circuits) c.kwh = +(total(c.id) / 1000).toFixed(2);
 
   const series: Bucket[] = starts.map((t) => ({ t, label: LABEL[range](t), load: 0, solar: 0, gridIn: 0, gridOut: 0, battIn: 0, battOut: 0, soc: null, has: false }));
+  // Buckets where the whole-home grid helpers have data use them instead of the per-cube grid counters.
+  const homeGrid = new Set<number>();
+  for (const k of ["gridIn", "gridOut"] as const) for (const r of stats[HOME_GRID[k]] ?? []) {
+    const b = bucketOf(r.start); if (b < 0 || r.change == null) continue;
+    series[b][k] += change(r); homeGrid.add(b); series[b].has = true;
+  }
   for (const k of COUNTER_KEYS) for (const id of counterIds[k]) for (const r of stats[id] ?? []) {
     const b = bucketOf(r.start); if (b < 0) continue;
+    if ((k === "gridIn" || k === "gridOut") && homeGrid.has(b)) continue;
     series[b][k] += change(r); if (r.change != null) series[b].has = true;
   }
   const socAcc = series.map(() => ({ s: 0, n: 0 }));
@@ -135,7 +146,8 @@ export async function getEnergy(range: Range): Promise<Energy> {
   const first = series.findIndex((b) => b.has);
   const since = first > 0 ? series[first].label : null;
 
-  // Per-cube detail by side. L feeds the left SPAN panel, R the right (David, 2026-10-25).
+  // Per-cube detail by side. L feeds the left SPAN panel, R the right (David, 2026-10-25). Grid in/out here is
+  // each cube's own flow, so the two can overlap (see HOME_GRID).
   const cubes: Cube[] = (["l", "r"] as const).filter((s) => counterIds.load.some((i) => i.includes(`epcube_${s}_`))).map((side) => {
     const of = (k: CounterKey) => +counterIds[k].filter((i) => i.includes(`epcube_${side}_`)).reduce((s, id) => s + total(id), 0).toFixed(1);
     return { name: side === "l" ? "Left cube" : "Right cube", soc: socOf(socIds.filter((i) => i.includes(`epcube_${side}_`))), solar: of("solar"), load: of("load"), gridIn: of("gridIn"), gridOut: of("gridOut"), battIn: of("battIn"), battOut: of("battOut") };

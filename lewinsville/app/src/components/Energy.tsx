@@ -57,7 +57,7 @@ export function Energy({ detail }: { detail: boolean }) {
             {e.totals.net >= 0
               ? <>Sold cancels bought, so Dominion counts <b>{kwh(e.totals.net)} kWh</b> net{e.totals.cost != null && <>, about <b>${e.totals.cost.toFixed(2)}</b></>}.</>
               : <>We sent back <b>{kwh(-e.totals.net)} kWh</b> more than we bought{e.totals.cost != null && <>, a credit of about <b>${(-e.totals.cost).toFixed(2)}</b></>}.</>}
-            <span className="ml-1 text-xs opacity-60">{e.totals.rateCents != null ? `At ${e.totals.rateCents}¢ per kWh, an estimate; fixed charges not included.` : "Net metering: a kWh sold cancels a kWh bought."}</span>
+            <span className="ml-1 text-xs opacity-60">{e.totals.rateCents != null ? `At ${e.totals.rateCents}¢ per kWh, the average price on recent bills; an estimate.` : "Net metering: a kWh sold cancels a kWh bought."}</span>
           </div>
         )}
         <Chart series={e.series} range={e.range} />
