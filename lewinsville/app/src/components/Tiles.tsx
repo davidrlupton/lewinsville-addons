@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { supportsColor, type Device } from "@/lib/house";
+import { NO_PARTIAL_COVERS, supportsColor, type Device } from "@/lib/house";
 
 type Call = (body: Record<string, unknown>) => Promise<boolean>;
 export const FLOOR_COLOR: Record<string, string> = {
@@ -85,17 +85,30 @@ export function SwitchTile({ d, call, color }: { d: Device; call: Call; color: s
   );
 }
 
-export function CoverTile({ d, call }: { d: Device; call: Call }) {
-  const pos = d.attrs.current_position as number | undefined;
-  const label = pos == null ? d.state : pos === 0 ? "closed" : pos === 100 ? "open" : `${pos}% open`;
+export function CoverTile({ d, call, color }: { d: Device; call: Call; color: string }) {
+  const pos = typeof d.attrs.current_position === "number" ? Math.round(d.attrs.current_position) : d.state === "open" ? 100 : d.state === "closed" ? 0 : null;
+  const [drag, setDrag] = useState<number | null>(null);
+  const shown = drag ?? pos;
+  const open = (shown ?? 0) > 0;
+  const label = shown == null ? d.state : shown === 0 ? "closed" : shown === 100 ? "open" : `${shown}% open`;
+  const wholeOnly = NO_PARTIAL_COVERS.has(d.id);
   return (
-    <div className="tile bg-card">
-      <div className="flex items-center justify-between"><span className="font-bold">{d.name}</span><span className="text-xs font-bold opacity-60">{label}</span></div>
-      <div className="mt-2 grid grid-cols-3 gap-2 text-sm font-bold">
-        <button className="rounded-xl bg-sky/20 py-2" onClick={() => call({ entity_id: d.id, action: "open" })}>Open</button>
-        <button className="rounded-xl bg-ink/10 py-2" onClick={() => call({ entity_id: d.id, action: "set_position", value: 50 })}>Half</button>
-        <button className="rounded-xl bg-indigo/20 py-2" onClick={() => call({ entity_id: d.id, action: "close" })}>Close</button>
-      </div>
+    <div className="tile" style={{ background: open ? `var(--on, ${color})` : "var(--card)", color: open ? "var(--on-ink)" : "var(--ink)" }}>
+      <button className="flex w-full items-center justify-between gap-3" onClick={() => call({ entity_id: d.id, action: open ? "close" : "open" })}>
+        <span className="font-bold leading-tight">{d.name}</span>
+        <span className="text-xs font-bold opacity-70">{label}</span>
+      </button>
+      {wholeOnly ? (
+        <div className="mt-2 grid grid-cols-2 gap-2 text-sm font-bold">
+          <button className="rounded-xl py-2" style={{ background: "var(--cream)", color: "var(--ink)" }} onClick={() => call({ entity_id: d.id, action: "open" })}>Open</button>
+          <button className="rounded-xl py-2" style={{ background: "var(--cream)", color: "var(--ink)" }} onClick={() => call({ entity_id: d.id, action: "close" })}>Close</button>
+        </div>
+      ) : (
+        <input type="range" min={0} max={100} value={shown ?? 0} aria-label={`${d.name} position`}
+          onChange={(e) => setDrag(Number(e.target.value))}
+          onPointerUp={() => { if (drag != null) { call({ entity_id: d.id, action: drag === 0 ? "close" : drag === 100 ? "open" : "set_position", value: drag }); setDrag(null); } }}
+          className="mt-2" />
+      )}
     </div>
   );
 }
@@ -155,7 +168,7 @@ export function DeviceTile(props: { d: Device; call: Call; color: string }) {
   switch (props.d.domain) {
     case "light": return <LightTile {...props} />;
     case "fan": return <FanTile {...props} />;
-    case "cover": return <CoverTile d={props.d} call={props.call} />;
+    case "cover": return <CoverTile {...props} />;
     case "climate": return <ClimateCard d={props.d} call={props.call} />;
     case "media_player": return <MediaCard d={props.d} call={props.call} />;
     default: return <SwitchTile {...props} />;
