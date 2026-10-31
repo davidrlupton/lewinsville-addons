@@ -45,6 +45,36 @@ export function LightTile({ d, call, color }: { d: Device; call: Call; color: st
   );
 }
 
+export function FanTile({ d, call, color }: { d: Device; call: Call; color: string }) {
+  const on = d.state === "on";
+  const pct = typeof d.attrs.percentage === "number" ? Math.round(d.attrs.percentage) : 0;
+  const presets = (d.attrs.preset_modes as string[] | undefined) ?? [];
+  const preset = typeof d.attrs.preset_mode === "string" ? d.attrs.preset_mode : null;
+  const [drag, setDrag] = useState<number | null>(null);
+  return (
+    <div className="tile" style={{ background: on ? `var(--on, ${color})` : "var(--card)", color: on ? "var(--on-ink)" : "var(--ink)" }}>
+      <button className="flex w-full items-center justify-between gap-3" onClick={() => call({ entity_id: d.id, action: "toggle" })}>
+        <span className="font-bold leading-tight">{d.name}</span>
+        <span className="text-xs font-bold opacity-70">{!on ? "off" : preset ? preset : `${drag ?? pct}%`}</span>
+      </button>
+      {on && (
+        <input type="range" min={0} max={100} value={drag ?? pct} aria-label={`${d.name} speed`}
+          onChange={(e) => setDrag(Number(e.target.value))}
+          onPointerUp={() => { if (drag != null) { call({ entity_id: d.id, action: drag === 0 ? "turn_off" : "set_percentage", value: drag }); setDrag(null); } }}
+          className="mt-2" />
+      )}
+      {on && presets.length > 0 && (
+        <div className="mt-2 flex gap-2">
+          {presets.map((p) => (
+            <button key={p} className="rounded-full px-3 py-1 text-xs font-bold capitalize" style={{ background: preset === p ? "var(--ink)" : "var(--cream)", color: preset === p ? "var(--cream)" : "var(--ink)" }}
+              onClick={() => call(preset === p ? { entity_id: d.id, action: "set_percentage", value: pct || 50 } : { entity_id: d.id, action: "set_preset", preset: p })}>{p}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SwitchTile({ d, call, color }: { d: Device; call: Call; color: string }) {
   const on = d.state === "on";
   return (
@@ -124,6 +154,7 @@ export function MediaCard({ d, call }: { d: Device; call: Call }) {
 export function DeviceTile(props: { d: Device; call: Call; color: string }) {
   switch (props.d.domain) {
     case "light": return <LightTile {...props} />;
+    case "fan": return <FanTile {...props} />;
     case "cover": return <CoverTile d={props.d} call={props.call} />;
     case "climate": return <ClimateCard d={props.d} call={props.call} />;
     case "media_player": return <MediaCard d={props.d} call={props.call} />;

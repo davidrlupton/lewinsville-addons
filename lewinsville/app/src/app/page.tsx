@@ -1,4 +1,5 @@
 "use client";
+import type { House, Room } from "@/lib/house";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useHouse } from "@/components/useHouse";
 import { ClimateCard, DeviceTile, FLOOR_COLOR, MediaCard } from "@/components/Tiles";
@@ -13,6 +14,14 @@ type Theme = "festival" | "slate";
 function readSavedTheme(): Theme | null { try { const t = localStorage.getItem("lhh-theme"); return t === "slate" || t === "festival" ? t : null; } catch { return null; } }
 function subscribeTheme(cb: () => void) { window.addEventListener("lhh-theme", cb); window.addEventListener("storage", cb); return () => { window.removeEventListener("lhh-theme", cb); window.removeEventListener("storage", cb); }; }
 type Tab = (typeof TABS)[number][0];
+
+// The whole primary suite as one room, pinned at the top of Rooms (David, 2026-10-31).
+const SUITE = ["primary_bedroom", "primary_bath", "primary_closet", "primary_water_closet"];
+function suite(house: House): Room {
+  const parts = house.rooms.filter((r) => SUITE.includes(r.id));
+  const label = (r: Room) => r.name.replace(/^Primary ?/, "") || "Bedroom";
+  return { id: "primary_suite", name: "Primary Suite", floor: "Second Floor", devices: parts.flatMap((r) => r.devices.map((d) => ({ ...d, name: `${label(r)} · ${d.name}` }))) };
+}
 
 export default function Page() {
   const { house, me, error, call } = useHouse();
@@ -96,7 +105,11 @@ export default function Page() {
 
       {tab === "rooms" && house && (
         <div className="space-y-5">
-          {room === null ? house.floors.map((f) => (
+          {room === null ? <>
+            <button className="card jaali flex h-16 w-full items-center justify-between px-4 text-left text-white shadow-lg" style={{ background: "var(--scene-night)" }} onClick={() => setRoom("primary_suite")}>
+              <span className="text-lg font-extrabold">Primary Suite</span><span className="text-xs font-bold opacity-80">bedroom · bath · closet</span>
+            </button>
+            {house.floors.map((f) => (
             <section key={f}>
               <h2 className="mb-2 text-lg font-extrabold" style={{ color: FLOOR_COLOR[f] }}>{f}</h2>
               <div className="grid grid-cols-2 gap-2">
@@ -111,8 +124,8 @@ export default function Page() {
                 })}
               </div>
             </section>
-          )) : (() => {
-            const r = house.rooms.find((x) => x.id === room)!;
+          ))}</> : (() => {
+            const r = room === "primary_suite" ? suite(house) : house.rooms.find((x) => x.id === room)!;
             const lights = r.devices.filter((d) => d.domain === "light");
             return (
               <section>

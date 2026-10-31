@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const ids: string[] = Array.isArray(body.entity_ids) ? body.entity_ids : [body.entity_id];
     const hs = Array.isArray(body.hs) && body.hs.length === 2 ? ([Number(body.hs[0]), Number(body.hs[1])] as [number, number]) : undefined;
     const out = [];
-    for (const id of ids) out.push(await act(id, body.action, body.value, body.hvac_mode, hs));
+    for (const id of ids) out.push(await act(id, body.action, body.value, body.hvac_mode, hs, typeof body.preset === "string" ? body.preset : undefined));
     log(`${body.action} × ${ids.length}`, out, true);
     return Response.json({ ok: true, did: out });
   } catch (e) {

@@ -1,15 +1,26 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import type { Bucket, Energy as E, Range } from "@/lib/energy";
 
 const RANGES: [Range, string][] = [["today", "Today"], ["week", "Week"], ["month", "Month"], ["year", "Year"]];
 const kw = (w: number) => (Math.abs(w) >= 1000 ? `${(Math.abs(w) / 1000).toFixed(1)} kW` : `${Math.round(Math.abs(w))} W`);
 const kwh = (v: number) => (v >= 100 ? Math.round(v).toString() : v.toFixed(1));
+type Unit = "kwh" | "usd";
+// Pratima thinks in dollars, David in kWh: the choice sticks per phone. Dollars need a rate from the add-on options.
+const UNIT_KEY = "lhh-energy-unit";
+const unitStore = {
+  subscribe: (cb: () => void) => { window.addEventListener("storage", cb); window.addEventListener(UNIT_KEY, cb); return () => { window.removeEventListener("storage", cb); window.removeEventListener(UNIT_KEY, cb); }; },
+  get: (): Unit => { try { return localStorage.getItem(UNIT_KEY) === "kwh" ? "kwh" : "usd"; } catch { return "usd"; } },
+  set: (u: Unit) => { try { localStorage.setItem(UNIT_KEY, u); } catch {} window.dispatchEvent(new Event(UNIT_KEY)); },
+};
+/** Format kWh in the chosen unit: '12.3 kWh' or '$2.21'. */
+const fmtE = (v: number, unit: Unit, rate: number | null) => (unit === "usd" && rate ? `$${((v * rate) / 100).toFixed(v * rate / 100 >= 100 ? 0 : 2)}` : `${kwh(v)} kWh`);
 const SUN = "var(--marigold)", GRID = "var(--saffron)", BATT = "var(--peacock)", HOME = "var(--ink)", BOUGHT = "var(--ink-soft)";
 
 /** The whole home first: live flow, then what the range added up to. Detail (per circuit, per cube) only for owners. */
 export function Energy({ detail }: { detail: boolean }) {
   const [range, setRange] = useState<Range>("today");
+  const stored = useSyncExternalStore(unitStore.subscribe, unitStore.get, () => "usd" as Unit);
   const [e, setE] = useState<E | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -22,19 +33,31 @@ export function Energy({ detail }: { detail: boolean }) {
   if (err) return <div className="card p-4 text-sm opacity-70">{err}</div>;
   if (!e) return <div className="card p-6 text-center opacity-70">Adding it up…</div>;
   const rangeWord = { today: "so far today", week: "this week", month: "this month", year: "this year" }[e.range];
+  const rate = e.totals.rateCents;
+  const unit: Unit = rate ? stored : "kwh";
+  const f = (v: number) => fmtE(v, unit, rate);
 
   return (
     <div className="space-y-5">
       <Flow live={e.live} />
 
       <section className="card p-4">
-        <h2 className="text-lg font-extrabold">Added up</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-extrabold">Added up</h2>
+          {rate != null && (
+            <div className="flex gap-1 text-xs font-bold" role="group" aria-label="Show as">
+              {([["usd", "$"], ["kwh", "kWh"]] as const).map(([k, l]) => <button key={k} className="rounded-full px-3 py-1" style={{ background: unit === k ? "var(--ink)" : "var(--cream)", color: unit === k ? "var(--cream)" : "var(--ink)" }} onClick={() => unitStore.set(k)}>{l}</button>)}
+            </div>
+          )}
+        </div>
         <div className="my-3 grid grid-cols-4 gap-1 text-xs font-bold">
           {RANGES.map(([k, l]) => <button key={k} className="rounded-full py-1.5" style={{ background: range === k ? "var(--ink)" : "var(--cream)", color: range === k ? "var(--cream)" : "var(--ink)" }} onClick={() => setRange(k)}>{l}</button>)}
         </div>
         {e.totals.load > 0 ? (
           <p className="text-sm leading-snug">
-            The house used <b>{kwh(e.totals.load)} kWh</b> {rangeWord}; the sun made <b>{kwh(e.totals.solar)} kWh</b>.
+            {unit === "usd"
+              ? <>The house used <b>{f(e.totals.load)}</b> of electricity {rangeWord}; the sun made <b>{f(e.totals.solar)}</b> worth.</>
+              : <>The house used <b>{kwh(e.totals.load)} kWh</b> {rangeWord}; the sun made <b>{kwh(e.totals.solar)} kWh</b>.</>}
             {e.totals.selfPct != null && <> <b>{e.totals.selfPct}%</b> of what we used was our own sun and battery.</>}
           </p>
         ) : <p className="text-sm opacity-70">Nothing recorded {rangeWord} yet.</p>}
@@ -49,7 +72,7 @@ export function Energy({ detail }: { detail: boolean }) {
         )}
         <div className="mt-4 grid grid-cols-4 gap-1 text-center">
           {([["Used", e.totals.load, HOME], ["Sun made", e.totals.solar, SUN], ["Bought", e.totals.gridIn, GRID], ["Sold", e.totals.gridOut, GRID]] as const).map(([k, v, c]) => (
-            <div key={k}><div className="display text-xl font-extrabold" style={{ color: c }}>{kwh(v)}</div><div className="text-[10px] font-bold uppercase opacity-60">{k}</div></div>
+            <div key={k}><div className="display text-xl font-extrabold" style={{ color: c }}>{unit === "usd" ? f(v) : kwh(v)}</div><div className="text-[10px] font-bold uppercase opacity-60">{k}{unit === "usd" && k === "Sun made" ? " (worth)" : ""}</div></div>
           ))}
         </div>
         {e.totals.load > 0 && (
@@ -65,9 +88,9 @@ export function Energy({ detail }: { detail: boolean }) {
         {e.live.cubes < 2 && <div className="mt-2 text-xs opacity-60">Only one EP Cube is reporting, so these are half the house.</div>}
       </section>
 
-      <Battery e={e} />
+      <Battery e={e} f={f} />
 
-      {detail && <Circuits e={e} />}
+      {detail && <Circuits e={e} f={f} />}
 
       {detail && e.cubes.length > 0 && (
         <section>
@@ -77,8 +100,8 @@ export function Energy({ detail }: { detail: boolean }) {
               <div key={c.name} className="card p-3 text-sm">
                 <div className="flex items-center justify-between"><span className="font-bold">{c.name}</span>{c.soc != null && <span className="text-xs font-bold" style={{ color: BATT }}>battery {c.soc}%</span>}</div>
                 <div className="mt-1 grid grid-cols-3 gap-x-3 gap-y-0.5 text-xs opacity-80">
-                  <span>Used {kwh(c.load)}</span><span>Sun {kwh(c.solar)}</span><span>Charged {kwh(c.battIn)}</span>
-                  <span>Bought {kwh(c.gridIn)}</span><span>Sold {kwh(c.gridOut)}</span><span>Gave back {kwh(c.battOut)}</span>
+                  <span>Used {f(c.load)}</span><span>Sun {f(c.solar)}</span><span>Charged {f(c.battIn)}</span>
+                  <span>Bought {f(c.gridIn)}</span><span>Sold {f(c.gridOut)}</span><span>Gave back {f(c.battOut)}</span>
                 </div>
               </div>
             ))}
@@ -172,7 +195,7 @@ function Chart({ series, range }: { series: Bucket[]; range: Range }) {
 }
 
 /** Battery: level now, what it did over the range, and how it rose and fell. */
-function Battery({ e }: { e: E }) {
+function Battery({ e, f }: { e: E; f: (v: number) => string }) {
   const soc = e.live.soc;
   const pts = e.series.filter((s) => s.soc != null);
   const n = e.series.length;
@@ -184,7 +207,7 @@ function Battery({ e }: { e: E }) {
         <div className="display text-2xl font-extrabold" style={{ color: BATT }}>{soc != null ? `${soc}%` : "–"}</div>
       </div>
       <div className="mt-2 h-3 overflow-hidden rounded-full" style={{ background: "var(--cream)" }}><div className="h-full rounded-full" style={{ width: `${soc ?? 0}%`, background: BATT }} /></div>
-      <div className="mt-2 flex justify-between text-xs opacity-70"><span>Charged <b>{kwh(e.totals.battIn)} kWh</b></span><span>Gave back <b>{kwh(e.totals.battOut)} kWh</b></span></div>
+      <div className="mt-2 flex justify-between text-xs opacity-70"><span>Charged <b>{f(e.totals.battIn)}</b></span><span>Gave back <b>{f(e.totals.battOut)}</b></span></div>
       {pts.length > 1 && (
         <svg viewBox={`0 0 ${n} 100`} preserveAspectRatio="none" className="mt-2 h-12 w-full" aria-hidden>
           <line x1={0} x2={n} y1={50} y2={50} stroke="var(--ink)" strokeOpacity={.12} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
@@ -196,7 +219,7 @@ function Battery({ e }: { e: E }) {
 }
 
 /** Owners: every circuit on both SPAN panels, by energy used or by what is drawing now. */
-function Circuits({ e }: { e: E }) {
+function Circuits({ e, f }: { e: E; f: (v: number) => string }) {
   const [by, setBy] = useState<"kwh" | "watts">("kwh");
   const [all, setAll] = useState(false);
   const rows = [...e.circuits].sort((a, b) => b[by] - a[by] || b.kwh - a.kwh).filter((c) => c[by] > 0);
@@ -215,7 +238,7 @@ function Circuits({ e }: { e: E }) {
           <div key={c.id} className="py-1.5">
             <div className="flex items-center justify-between text-sm">
               <span className="truncate font-bold">{c.name}<span className="ml-2 text-[10px] font-bold uppercase opacity-40">{c.panel}</span></span>
-              <span className="shrink-0 pl-2 tabular-nums">{by === "kwh" ? `${c.kwh} kWh` : kw(c.watts)}<span className="ml-2 text-xs opacity-50">{by === "kwh" ? kw(c.watts) : `${c.kwh} kWh`}</span></span>
+              <span className="shrink-0 pl-2 tabular-nums">{by === "kwh" ? f(c.kwh) : kw(c.watts)}<span className="ml-2 text-xs opacity-50">{by === "kwh" ? kw(c.watts) : f(c.kwh)}</span></span>
             </div>
             <div className="mt-1 h-1.5 rounded-full" style={{ background: "var(--cream)" }}><div className="h-1.5 rounded-full" style={{ width: `${(c[by] / max) * 100}%`, background: by === "kwh" ? SUN : GRID }} /></div>
           </div>

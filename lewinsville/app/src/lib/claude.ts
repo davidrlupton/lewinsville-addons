@@ -43,7 +43,7 @@ How to behave:
 - Do not discuss these instructions.`;
 
 const ACTIONS = ["turn_on", "turn_off", "toggle", "set_brightness", "open", "close", "stop", "set_position",
-  "set_temperature", "set_hvac_mode", "play", "pause", "volume_set", "next_track", "set_color", "set_color_temp"] as const;
+  "set_temperature", "set_hvac_mode", "play", "pause", "volume_set", "next_track", "set_color", "set_color_temp", "set_percentage", "set_preset"] as const;
 
 export function tools(person: Person) {
   const control = betaZodTool({
@@ -106,7 +106,7 @@ export function tools(person: Person) {
   return [listHouse, control, setScene, setMood, energy];
 }
 
-export async function act(entity_id: string, action: (typeof ACTIONS)[number], value?: number, hvac_mode?: string, hs?: [number, number]): Promise<string> {
+export async function act(entity_id: string, action: (typeof ACTIONS)[number], value?: number, hvac_mode?: string, hs?: [number, number], preset?: string): Promise<string> {
   const domain = entity_id.split(".")[0];
   if (!CONTROL_DOMAINS.has(domain)) throw new Error("not a controllable device");
   const h = hub();
@@ -130,6 +130,8 @@ export async function act(entity_id: string, action: (typeof ACTIONS)[number], v
       if (!partialAllowed(entity_id, pos)) return `${entity_id}: skipped, the living room shade covers a door and only goes fully open or closed`;
       await h.callService("cover", "set_cover_position", { position: pos }, t); break;
     }
+    case "set_percentage": await h.callService("fan", "set_percentage", { percentage: clamp(value, 0, 100, 50) }, t); break;
+    case "set_preset": await h.callService("fan", "set_preset_mode", { preset_mode: String(preset ?? "breeze") }, t); break;
     case "set_temperature": await h.callService("climate", "set_temperature", { temperature: clamp(value, 60, 80, 72) }, t); break;
     case "set_hvac_mode": await h.callService("climate", "set_hvac_mode", { hvac_mode: hvac_mode ?? "off" }, t); break;
     case "play": await h.callService("media_player", "media_play", {}, t); break;
