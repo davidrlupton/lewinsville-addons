@@ -10,7 +10,7 @@ import { Energy } from "@/components/Energy";
 import { Sounds } from "@/components/Sounds";
 import { Log } from "@/components/Log";
 
-const TABS: readonly (readonly [string, string, IconName])[] = [["home", "Home", "home"], ["entertain", "Lounge", "lounge"], ["rooms", "Rooms", "rooms"], ["energy", "Energy", "energy"], ["climate", "Climate", "climate"], ["talk", "Talk", "talk"]];
+const TABS: readonly (readonly [string, string, IconName])[] = [["home", "Home", "home"], ["rooms", "Rooms", "rooms"], ["energy", "Energy", "energy"], ["climate", "Climate", "climate"], ["talk", "Talk", "talk"]];
 type Tab = (typeof TABS)[number][0];
 type Theme = "festival" | "slate";
 function readSavedTheme(): Theme | null { try { const t = localStorage.getItem("lhh-theme"); return t === "slate" || t === "festival" ? t : null; } catch { return null; } }
@@ -35,6 +35,7 @@ export default function Page() {
   const backToRooms = () => { setPop(true); setRoom(null); };
   const [armed, setArmed] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+  const [shades, setShades] = useState(false);   // the all-shades screen, reached from the Shades card on Home
   // The look: the person's default from the server, overridden by whatever they last picked on this device.
   const saved = useSyncExternalStore(subscribeTheme, readSavedTheme, () => null);
   const theme: Theme | null = saved ?? me?.theme ?? null;
@@ -64,6 +65,13 @@ export default function Page() {
   const media = all.filter((d) => d.domain === "media_player" && d.state === "playing");
   const tabIndex = Math.max(0, TABS.findIndex(([k]) => k === tab));
   const ring = (key: string) => (armed === key ? { boxShadow: "0 0 0 3px var(--ink)" } : undefined);
+  const shadeButtons = (
+    <div className="grid grid-cols-3 gap-2 font-bold">
+      <button className="rounded-2xl bg-sky/25 py-3" style={ring("open")} onClick={() => confirmThen("open", () => call({ entity_ids: covers.map((c) => c.id), action: "open" }))}>{armed === "open" ? "Tap again" : "Open all"}</button>
+      <button className="rounded-2xl bg-ink/10 py-3" style={ring("half")} onClick={() => confirmThen("half", () => call({ entity_ids: covers.filter((c) => c.id !== "cover.living_room_shade").map((c) => c.id), action: "set_position", value: 50 }))}>{armed === "half" ? "Tap again" : "Halfway"}</button>
+      <button className="rounded-2xl bg-indigo/25 py-3" style={ring("close")} onClick={() => confirmThen("close", () => call({ entity_ids: covers.map((c) => c.id), action: "close" }))}>{armed === "close" ? "Tap again" : "Close all"}</button>
+    </div>
+  );
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-xl flex-col px-4 pb-32 pt-4" style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}>
@@ -75,7 +83,27 @@ export default function Page() {
         <button className="card flex h-10 w-10 items-center justify-center text-base" aria-label="Switch look" title={theme === "slate" ? "Switch to colour" : "Switch to quiet"} onClick={() => setTheme(theme === "slate" ? "festival" : "slate")}>{theme === "slate" ? "◑" : "◐"}</button>
       </header>
 
-      {tab === "home" && house && (
+      {tab === "home" && house && shades && (
+        <section key="shades" className="enter-right space-y-5">
+          <button className="text-sm font-bold text-ink-soft" onClick={() => setShades(false)}>‹ Home</button>
+          <div className="-mt-2 flex items-baseline justify-between">
+            <h2 className="display text-2xl font-extrabold">Shades</h2><span className="label">{covers.length} in the house</span>
+          </div>
+          {shadeButtons}
+          {house.floors.map((f) => {
+            const cs = covers.filter((c) => c.floor === f);
+            if (!cs.length) return null;
+            return (
+              <section key={f}>
+                <h3 className="mb-2 text-lg font-extrabold" style={{ color: FLOOR_COLOR[f] }}>{f}</h3>
+                <div className="stagger grid grid-cols-1 gap-2 sm:grid-cols-2">{cs.map((d) => <DeviceTile key={d.id} d={{ ...d, name: `${d.room} · ${d.name}` }} call={call} color={FLOOR_COLOR[f]} />)}</div>
+              </section>
+            );
+          })}
+        </section>
+      )}
+
+      {tab === "home" && house && !shades && (
         <div key="home" className="enter space-y-5">
           <section>
             <div className="grid grid-cols-2 gap-3">
@@ -85,12 +113,10 @@ export default function Page() {
             </div>
           </section>
           <section className="card p-4">
-            <div className="mb-2 flex items-baseline justify-between"><h2 className="text-lg font-extrabold">Shades</h2><span className="label">{covers.length} in the house</span></div>
-            <div className="grid grid-cols-3 gap-2 font-bold">
-              <button className="rounded-2xl bg-sky/25 py-3" style={ring("open")} onClick={() => confirmThen("open", () => call({ entity_ids: covers.map((c) => c.id), action: "open" }))}>{armed === "open" ? "Tap again" : "Open all"}</button>
-              <button className="rounded-2xl bg-ink/10 py-3" style={ring("half")} onClick={() => confirmThen("half", () => call({ entity_ids: covers.filter((c) => c.id !== "cover.living_room_shade").map((c) => c.id), action: "set_position", value: 50 }))}>{armed === "half" ? "Tap again" : "Halfway"}</button>
-              <button className="rounded-2xl bg-indigo/25 py-3" style={ring("close")} onClick={() => confirmThen("close", () => call({ entity_ids: covers.map((c) => c.id), action: "close" }))}>{armed === "close" ? "Tap again" : "Close all"}</button>
-            </div>
+            <button className="mb-2 flex w-full items-baseline justify-between text-left" onClick={() => setShades(true)}>
+              <h2 className="text-lg font-extrabold">Shades</h2><span className="label">{covers.length} in the house ›</span>
+            </button>
+            {shadeButtons}
           </section>
           <section>
             <div className="mb-2 flex items-baseline justify-between"><h2 className="text-lg font-extrabold">Lights on</h2>
@@ -119,9 +145,14 @@ export default function Page() {
       {tab === "rooms" && house && (
         room === null ? (
           <div key="rooms-list" className={`${pop ? "enter-left" : "enter"} space-y-5`}>
-            <button className="card jaali flex h-16 w-full items-center justify-between px-4 text-left text-white shadow-lg" style={{ background: "var(--scene-night)" }} onClick={() => goRoom("primary_suite")}>
-              <span className="text-lg font-extrabold">Primary Suite</span><span className="text-xs font-bold opacity-80">bedroom · bath · closet</span>
-            </button>
+            <div className="grid grid-cols-1 gap-2">
+              <button className="card jaali flex h-16 w-full items-center justify-between px-4 text-left text-white shadow-lg" style={{ background: "var(--scene-night)" }} onClick={() => goRoom("primary_suite")}>
+                <span className="text-lg font-extrabold">Primary Suite</span><span className="text-xs font-bold opacity-80">bedroom · bath · closet</span>
+              </button>
+              <button className="card jaali flex h-16 w-full items-center justify-between px-4 text-left text-white shadow-lg" style={{ background: "var(--scene-welcome)" }} onClick={() => goRoom("lounge")}>
+                <span className="text-lg font-extrabold">Lounge</span><span className="text-xs font-bold opacity-80">living · kitchen · dining</span>
+              </button>
+            </div>
             {house.floors.map((f) => (
               <section key={f}>
                 <h2 className="mb-2 text-lg font-extrabold" style={{ color: FLOOR_COLOR[f] }}>{f}</h2>
@@ -139,6 +170,12 @@ export default function Page() {
               </section>
             ))}
           </div>
+        ) : room === "lounge" ? (
+          <section key="lounge" className="enter-right">
+            <button className="mb-3 text-sm font-bold text-ink-soft" onClick={backToRooms}>‹ All rooms</button>
+            <h2 className="display mb-3 text-2xl font-extrabold">Lounge</h2>
+            <Entertain house={house} call={call} />
+          </section>
         ) : (() => {
           const r = room === "primary_suite" ? suite(house) : house.rooms.find((x) => x.id === room)!;
           const lights = r.devices.filter((d) => d.domain === "light");
@@ -157,8 +194,6 @@ export default function Page() {
           );
         })()
       )}
-
-      {tab === "entertain" && house && <div key="entertain" className="enter"><Entertain house={house} call={call} /></div>}
 
       {tab === "energy" && <div key="energy" className="enter"><Energy detail={me?.role === "owner"} /></div>}
 
@@ -186,7 +221,7 @@ export default function Page() {
           {TABS.map(([k, l, i]) => {
             const active = tab === k;
             return (
-              <button key={k} aria-current={active ? "page" : undefined} onClick={() => { setTab(k); if (k === "rooms") { setPop(false); setRoom(null); } }}
+              <button key={k} aria-current={active ? "page" : undefined} onClick={() => { setTab(k); if (k === "rooms") { setPop(false); setRoom(null); } if (k === "home") setShades(false); }}
                 className="relative z-10 flex flex-1 flex-col items-center gap-0.5 rounded-2xl py-1.5 text-[11px] font-bold" style={{ color: active ? "var(--cream)" : "var(--ink)" }}>
                 {Icon[i]()}{l}
               </button>
