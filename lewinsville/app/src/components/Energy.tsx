@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { Bucket, Energy as E, Range } from "@/lib/energy";
+import { Segmented } from "./Segmented";
 
 const RANGES: [Range, string][] = [["today", "Today"], ["week", "Week"], ["month", "Month"], ["year", "Year"]];
 const kw = (w: number) => (Math.abs(w) >= 1000 ? `${(Math.abs(w) / 1000).toFixed(1)} kW` : `${Math.round(Math.abs(w))} W`);
@@ -44,15 +45,9 @@ export function Energy({ detail }: { detail: boolean }) {
       <section className="card p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-extrabold">Added up</h2>
-          {rate != null && (
-            <div className="flex gap-1 text-xs font-bold" role="group" aria-label="Show as">
-              {([["usd", "$"], ["kwh", "kWh"]] as const).map(([k, l]) => <button key={k} className="rounded-full px-3 py-1" style={{ background: unit === k ? "var(--ink)" : "var(--cream)", color: unit === k ? "var(--cream)" : "var(--ink)" }} onClick={() => unitStore.set(k)}>{l}</button>)}
-            </div>
-          )}
+          {rate != null && <Segmented value={unit} options={[["usd", "$"], ["kwh", "kWh"]] as const} onChange={unitStore.set} label="Show as" />}
         </div>
-        <div className="my-3 grid grid-cols-4 gap-1 text-xs font-bold">
-          {RANGES.map(([k, l]) => <button key={k} className="rounded-full py-1.5" style={{ background: range === k ? "var(--ink)" : "var(--cream)", color: range === k ? "var(--cream)" : "var(--ink)" }} onClick={() => setRange(k)}>{l}</button>)}
-        </div>
+        <div className="my-3"><Segmented value={range} options={RANGES} onChange={setRange} size="md" label="Range" /></div>
         {e.totals.load === 0 && <p className="text-sm opacity-70">Nothing {rangeWord} yet.</p>}
         {e.totals.selfPct != null && (
           <div className="mt-3">
@@ -60,24 +55,24 @@ export function Energy({ detail }: { detail: boolean }) {
               <div style={{ width: `${e.totals.selfPct}%`, background: SUN }} />
               <div style={{ width: `${100 - e.totals.selfPct}%`, background: BOUGHT, opacity: .45 }} />
             </div>
-            <div className="mt-1 flex justify-between text-[11px] font-bold opacity-60"><span>Our own {e.totals.selfPct}%</span><span>Bought {100 - e.totals.selfPct}%</span></div>
+            <div className="num mt-1 flex justify-between text-[11px] font-bold text-ink-soft"><span>Our own {e.totals.selfPct}%</span><span>Bought {100 - e.totals.selfPct}%</span></div>
           </div>
         )}
         <div className="mt-4 grid grid-cols-4 gap-1 text-center">
           {([["Used", e.totals.load, HOME], ["Sun made", e.totals.solar, SUN], ["Bought", e.totals.gridIn, GRID], ["Sold", e.totals.gridOut, SOLD]] as const).map(([k, v, c]) => (
-            <div key={k}><div className="display text-xl font-extrabold" style={{ color: c }}>{unit === "usd" ? f(v) : kwh(v)}</div><div className="text-[10px] font-bold uppercase opacity-60">{k}{unit === "usd" && k === "Sun made" ? " (worth)" : ""}</div></div>
+            <div key={k}><div className="display text-xl font-extrabold" style={{ color: c }}>{unit === "usd" ? f(v) : kwh(v)}</div><div className="label mt-0.5">{k}</div></div>
           ))}
         </div>
         {e.totals.load > 0 && (
           <div className="mt-3 flex items-center justify-between rounded-xl px-3 py-2 text-sm" style={{ background: "var(--cream)" }}
             title={e.totals.rateCents != null ? `Net metering: a kWh sold cancels a kWh bought. Dollars at ${e.totals.rateCents}¢ per kWh, the average on recent bills.` : "Net metering: a kWh sold cancels a kWh bought."}>
             <span className="font-bold">{e.totals.net >= 0 ? "Net from Dominion" : "Net credit"}</span>
-            <span className="tabular-nums"><b>{kwh(Math.abs(e.totals.net))} kWh</b>{e.totals.cost != null && <span className="ml-2 opacity-70">≈ ${Math.abs(e.totals.cost).toFixed(2)}</span>}</span>
+            <span className="num"><b>{kwh(Math.abs(e.totals.net))} kWh</b>{e.totals.cost != null && <span className="ml-2 opacity-70">≈ ${Math.abs(e.totals.cost).toFixed(2)}</span>}</span>
           </div>
         )}
         <Chart series={e.series} range={e.range} />
-        {e.since && <div className="mt-2 text-xs opacity-60">Since {e.since}.</div>}
-        {e.live.cubes < 2 && <div className="mt-2 text-xs opacity-60">Only one EP Cube is reporting, so these are half the house.</div>}
+        {e.since && <div className="mt-2 text-xs text-ink-soft">Since {e.since}.</div>}
+        {e.live.cubes < 2 && <div className="mt-2 text-xs text-ink-soft">Only one EP Cube is reporting, so these are half the house.</div>}
       </section>
 
       <Battery e={e} f={f} />
@@ -91,7 +86,7 @@ export function Energy({ detail }: { detail: boolean }) {
             {e.cubes.map((c) => (
               <div key={c.name} className="card p-3 text-sm">
                 <div className="flex items-center justify-between"><span className="font-bold">{c.name}</span>{c.soc != null && <span className="text-xs font-bold" style={{ color: BATT }}>battery {c.soc}%</span>}</div>
-                <div className="mt-1 grid grid-cols-3 gap-x-3 gap-y-0.5 text-xs opacity-80">
+                <div className="num mt-1 grid grid-cols-3 gap-x-3 gap-y-0.5 text-xs text-ink-soft">
                   <span>Used {f(c.load)}</span><span>Sun {f(c.solar)}</span><span>Charged {f(c.battIn)}</span>
                   <span>Bought {f(c.gridIn)}</span><span style={{ color: SOLD }}>Sold {f(c.gridOut)}</span><span>Gave back {f(c.battOut)}</span>
                 </div>
@@ -107,9 +102,9 @@ export function Energy({ detail }: { detail: boolean }) {
 function Node({ label, value, sub, color, big }: { label: string; value: string; sub: string; color: string; big?: boolean }) {
   return (
     <div className={`card flex flex-col justify-center ${big ? "p-4" : "px-3 py-2"}`}>
-      <div className="text-[10px] font-bold uppercase opacity-60">{label}</div>
-      <div className={`display font-extrabold leading-tight ${big ? "text-3xl" : "text-lg"}`} style={{ color }}>{value}</div>
-      <div className="text-[11px] opacity-60">{sub}</div>
+      <div className="label">{label}</div>
+      <div className={`display whitespace-nowrap font-extrabold leading-tight ${big ? "text-[1.75rem]" : "text-lg"}`} style={{ color }}>{value}</div>
+      <div className="text-[11px] text-ink-soft">{sub}</div>
     </div>
   );
 }
@@ -173,10 +168,10 @@ function Chart({ series, range }: { series: Bucket[]; range: Range }) {
           ))}
         </div>
       )}
-      <div className="relative mt-1 h-4 text-[10px] font-bold opacity-50">
+      <div className="relative mt-1 h-4 text-[10px] font-bold text-ink-soft">
         {ticks.map((i) => <span key={i} className={`absolute ${i === 0 ? "" : i === n - 1 ? "-translate-x-full" : "-translate-x-1/2"}`} style={{ left: `${((i + (i === 0 ? 0 : i === n - 1 ? 1 : 0.5)) / n) * 100}%` }}>{series[i].label}</span>)}
       </div>
-      <div className="mt-1 flex gap-3 text-[10px] font-bold opacity-60">
+      <div className="mt-1 flex gap-3 text-[10px] font-bold text-ink-soft">
         <span><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: SUN }} />our own</span>
         <span><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: BOUGHT, opacity: .45 }} />bought</span>
         <span><i className="mr-1 inline-block w-3 border-t border-dashed align-middle" style={{ borderColor: "var(--ink)" }} />sun made</span>
@@ -199,7 +194,7 @@ function Battery({ e, f }: { e: E; f: (v: number) => string }) {
         <div className="display text-2xl font-extrabold" style={{ color: BATT }}>{soc != null ? `${soc}%` : "–"}</div>
       </div>
       <div className="mt-2 h-3 overflow-hidden rounded-full" style={{ background: "var(--cream)" }}><div className="h-full rounded-full" style={{ width: `${soc ?? 0}%`, background: BATT }} /></div>
-      <div className="mt-2 flex justify-between text-xs opacity-70"><span>Charged <b>{f(e.totals.battIn)}</b></span><span>Gave back <b>{f(e.totals.battOut)}</b></span></div>
+      <div className="num mt-2 flex justify-between text-xs text-ink-soft"><span>Charged <b>{f(e.totals.battIn)}</b></span><span>Gave back <b>{f(e.totals.battOut)}</b></span></div>
       {pts.length > 1 && (
         <svg viewBox={`0 0 ${n} 100`} preserveAspectRatio="none" className="mt-2 h-12 w-full" aria-hidden>
           <line x1={0} x2={n} y1={50} y2={50} stroke="var(--ink)" strokeOpacity={.12} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
@@ -221,22 +216,20 @@ function Circuits({ e, f }: { e: E; f: (v: number) => string }) {
     <section>
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-lg font-extrabold">By circuit</h2>
-        <div className="flex gap-1 text-xs font-bold">
-          {([["kwh", "Energy"], ["watts", "Right now"]] as const).map(([k, l]) => <button key={k} className="rounded-full px-3 py-1" style={{ background: by === k ? "var(--ink)" : "var(--cream)", color: by === k ? "var(--cream)" : "var(--ink)" }} onClick={() => setBy(k)}>{l}</button>)}
-        </div>
+        <Segmented value={by} options={[["kwh", "Energy"], ["watts", "Right now"]] as const} onChange={setBy} label="Sort circuits by" />
       </div>
       <div className="card p-3">
         {shown.map((c) => (
           <div key={c.id} className="py-1.5">
             <div className="flex items-center justify-between text-sm">
-              <span className="truncate font-bold">{c.name}<span className="ml-2 text-[10px] font-bold uppercase opacity-40">{c.panel}</span></span>
-              <span className="shrink-0 pl-2 tabular-nums">{by === "kwh" ? f(c.kwh) : kw(c.watts)}<span className="ml-2 text-xs opacity-50">{by === "kwh" ? kw(c.watts) : f(c.kwh)}</span></span>
+              <span className="truncate font-bold">{c.name}<span className="label ml-2 opacity-70">{c.panel}</span></span>
+              <span className="num shrink-0 pl-2">{by === "kwh" ? f(c.kwh) : kw(c.watts)}<span className="ml-2 text-xs opacity-50">{by === "kwh" ? kw(c.watts) : f(c.kwh)}</span></span>
             </div>
             <div className="mt-1 h-1.5 rounded-full" style={{ background: "var(--cream)" }}><div className="h-1.5 rounded-full" style={{ width: `${(c[by] / max) * 100}%`, background: by === "kwh" ? SUN : GRID }} /></div>
           </div>
         ))}
-        {rows.length === 0 && <div className="text-sm opacity-60">Nothing yet.</div>}
-        {rows.length > 10 && <button className="mt-2 text-xs font-bold opacity-60" onClick={() => setAll((v) => !v)}>{all ? "Show fewer" : `Show all ${rows.length}`}</button>}
+        {rows.length === 0 && <div className="text-sm text-ink-soft">Nothing yet.</div>}
+        {rows.length > 10 && <button className="mt-2 text-xs font-bold text-ink-soft" onClick={() => setAll((v) => !v)}>{all ? "Show fewer" : `Show all ${rows.length}`}</button>}
       </div>
     </section>
   );

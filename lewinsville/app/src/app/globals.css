@@ -2,7 +2,9 @@
 
 /* Two looks, picked per person (and switchable in the header):
    festival (default): bright and bold. Marigold, saffron, rani pink, peacock, indigo on warm cream.
-   slate: quiet and modern. Grey-white surfaces, one warm glow for anything that is on. */
+   slate: quiet and modern. Grey-white surfaces, one warm glow for anything that is on.
+   Both share one material system (below): system type, press feedback on pointer-down, a translucent tab bar,
+   size-specific tracking, and motion that is short, ease-out and interruptible. */
 :root {
   --cream: #fff6e9;
   --ink: #1c1240;
@@ -22,11 +24,20 @@
   --scene-welcome: var(--marigold); --scene-day: var(--sky); --scene-night: var(--indigo); --scene-away: var(--saffron);
   --radius-card: 1.5rem; --radius-tile: 1.25rem;
   --shadow: 0 10px 30px -12px rgba(28, 18, 64, 0.25);
-  --font-display: var(--font-sora), ui-sans-serif, system-ui;
-  --font-body: var(--font-manrope), ui-sans-serif, system-ui;
+  --shadow-float: 0 -1px 0 rgba(255,255,255,.5) inset, 0 12px 40px -16px rgba(28, 18, 64, 0.35);
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-edge: rgba(255, 255, 255, 0.55);
+  /* Type: the platform's own face. It ships optical sizing and tracking tables; we only tune tracking per size. */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI Variable Text", "Segoe UI", Roboto, sans-serif;
+  /* Motion tokens. Strong ease-out for anything entering or responding; nothing over 300ms. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --t-press: 120ms; --t-enter: 220ms; --t-move: 240ms;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --cream: #15102b; --ink: #fff3e0; --ink-soft: #c9c1e6; --card: #221a45; --shadow: 0 10px 30px -12px rgba(0,0,0,.6); }
+  :root { --cream: #15102b; --ink: #fff3e0; --ink-soft: #c9c1e6; --card: #221a45; --shadow: 0 10px 30px -12px rgba(0,0,0,.6); --shadow-float: 0 1px 0 rgba(255,255,255,.08) inset, 0 12px 40px -16px rgba(0,0,0,.8); --glass: rgba(34, 26, 69, 0.72); --glass-edge: rgba(255,255,255,.12); color-scheme: dark; }
 }
 :root[data-theme="slate"] {
   --cream: #f2f3f5; --ink: #141720; --ink-soft: #626a7a; --card: #ffffff; --line: #e4e6ea;
@@ -36,11 +47,11 @@
   --scene-welcome: var(--card); --scene-day: var(--card); --scene-night: var(--card); --scene-away: var(--card);
   --radius-card: 1rem; --radius-tile: .8rem;
   --shadow: 0 1px 2px rgba(20,23,32,.05), 0 10px 24px -18px rgba(20,23,32,.25);
-  --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --shadow-float: 0 1px 2px rgba(20,23,32,.06), 0 12px 32px -16px rgba(20,23,32,.3);
+  --glass: rgba(255,255,255,.78); --glass-edge: rgba(255,255,255,.8);
 }
 @media (prefers-color-scheme: dark) {
-  :root[data-theme="slate"] { --cream: #0e1013; --ink: #eceff3; --ink-soft: #9aa3b2; --card: #171a20; --line: #242830; --indigo: #2a2f38; --sky: #232830; --rani: #eceff3; --shadow: 0 1px 2px rgba(0,0,0,.4); }
+  :root[data-theme="slate"] { --cream: #0e1013; --ink: #eceff3; --ink-soft: #9aa3b2; --card: #171a20; --line: #242830; --indigo: #2a2f38; --sky: #232830; --rani: #eceff3; --shadow: 0 1px 2px rgba(0,0,0,.4); --shadow-float: 0 1px 0 rgba(255,255,255,.06) inset, 0 12px 32px -16px rgba(0,0,0,.8); --glass: rgba(23,26,32,.78); --glass-edge: rgba(255,255,255,.08); }
 }
 @theme inline {
   --color-cream: var(--cream);
@@ -54,14 +65,33 @@
   --color-indigo: var(--indigo);
   --color-sky: var(--sky);
   --color-lime: var(--lime);
+  --color-leaf: var(--leaf);
   --font-display: var(--font-display);
   --font-body: var(--font-body);
 }
-html, body { background: var(--cream); color: var(--ink); font-family: var(--font-body); -webkit-tap-highlight-color: transparent; }
-h1, h2, h3, .display { font-family: var(--font-display); letter-spacing: -0.02em; }
+
+/* ---- Phone baseline: the tells that make a web app feel embedded, removed one by one. ---- */
+html {
+  -webkit-tap-highlight-color: transparent;   /* we draw our own press feedback */
+  -webkit-text-size-adjust: 100%;             /* no font inflation in landscape */
+  overscroll-behavior: none;                  /* no pull-to-refresh or page rubber-band; the app owns scroll */
+  font-optical-sizing: auto;
+}
+html, body { background: var(--cream); color: var(--ink); font-family: var(--font-body); min-height: 100dvh; }
+body { font-size: 16px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+input, textarea, select { font-size: 16px; }   /* under 16px iOS zooms the page on focus and never zooms back */
+button, [role="button"], a, .tile, .chip, .scene { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+/* ---- Type: hierarchy from weight + size + tracking as a set. Large text tightens, tiny labels open up. ---- */
+h1, h2, h3, .display { font-family: var(--font-display); letter-spacing: -0.01em; line-height: 1.15; }
+h1, .display { letter-spacing: -0.022em; line-height: 1.05; }
+.label { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+.num, .display, .tabular { font-variant-numeric: tabular-nums; }
+:root[data-theme="slate"] .font-extrabold { font-weight: 700; }
+
+/* ---- Surfaces and materials ---- */
 .card { background: var(--card); border-radius: var(--radius-card); box-shadow: var(--shadow); border: 1px solid var(--line); }
-.tile { border-radius: var(--radius-tile); padding: 0.9rem 1rem; text-align: left; transition: transform .08s ease, background .15s ease; user-select: none; border: 1px solid var(--line); }
-.tile:active { transform: scale(.97); }
+.tile { border-radius: var(--radius-tile); padding: 0.9rem 1rem; text-align: left; border: 1px solid var(--line); }
 .scene { border-radius: var(--radius-tile); }
 .jaali {
   background-image:
@@ -71,16 +101,76 @@ h1, h2, h3, .display { font-family: var(--font-display); letter-spacing: -0.02em
 }
 :root[data-theme="slate"] .jaali { background-image: none; }
 :root[data-theme="slate"] .scene { color: var(--ink); border: 1px solid var(--line); box-shadow: var(--shadow); }
-:root[data-theme="slate"] .font-extrabold { font-weight: 700; }
 :root[data-theme="slate"] h1, :root[data-theme="slate"] h2 { letter-spacing: -0.01em; }
-.chip { width: 2rem; height: 2rem; border-radius: 9999px; border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line), 0 2px 6px rgba(0,0,0,.15); flex: none; }
-.chip:active { transform: scale(.92); }
-input[type=range] { accent-color: var(--marigold); width: 100%; }
-.scroll-x { overflow-x: auto; scrollbar-width: none; } .scroll-x::-webkit-scrollbar { display: none; }
-@keyframes pulse { 0%,100% { opacity: .5 } 50% { opacity: 1 } } .pulse { animation: pulse 1.2s infinite; }
 
-/* Energy tab: moving dashes on the live-flow lines */
+/* The floating tab bar: a translucent layer the page scrolls under, not an opaque strip that eats a row. */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--shadow-float);
+}
+@media (prefers-reduced-transparency: reduce) { .glass { background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; } }
+@media (prefers-contrast: more) { .glass { background: var(--card); border-color: var(--ink); } .card { border-color: var(--ink-soft); } }
+
+/* ---- Response: feedback lives on the press, and it is instant. Every pressable, one rule. ---- */
+button, [role="button"], .tile, .scene, .chip {
+  transition: transform var(--t-press) var(--ease-out), background-color 150ms ease, color 150ms ease, opacity 150ms ease, box-shadow 150ms ease;
+}
+button:active, [role="button"]:active, .tile:active, .scene:active { transform: scale(0.97); }
+.chip:active { transform: scale(0.92); }
+button:disabled { cursor: default; }
+button:disabled:active { transform: none; }
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled):hover, [role="button"]:hover, .tile:hover, .scene:hover { filter: brightness(1.03); }
+}
+
+.chip { width: 2rem; height: 2rem; border-radius: 9999px; border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line), 0 2px 6px rgba(0,0,0,.15); flex: none; }
+
+/* Range sliders: a thumb a thumb can find. Native tracking is already 1:1 with the finger. */
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; accent-color: var(--marigold); touch-action: pan-x; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 18%, transparent); }
+input[type=range]::-moz-range-track { height: 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 18%, transparent); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: #fff; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 1px 4px rgba(0,0,0,.25); transition: transform var(--t-press) var(--ease-out); }
+input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 1px solid rgba(0,0,0,.08); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+input[type=range]:active::-webkit-slider-thumb { transform: scale(1.12); }
+
+.scroll-x { overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; touch-action: pan-x pan-y; } .scroll-x::-webkit-scrollbar { display: none; }
+.scroll-y { overflow-y: auto; overscroll-behavior: contain; }
+
+/* ---- Motion ---- */
+/* Screens, rooms and cards arrive with a short ease-out rise; exit is instant (the next thing is already arriving). */
+.enter { animation: lhh-rise var(--t-enter) var(--ease-out) both; }
+.enter-right { animation: lhh-from-right var(--t-move) var(--ease-out) both; }   /* a push: room detail comes from the right */
+.enter-left { animation: lhh-from-left var(--t-move) var(--ease-out) both; }     /* a pop: the list returns from the left */
+@keyframes lhh-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes lhh-from-right { from { opacity: 0; transform: translateX(14px); } }
+@keyframes lhh-from-left { from { opacity: 0; transform: translateX(-14px); } }
+/* A list of tiles cascades in, 30ms apart, never more than ~8 steps so the last one is not late. */
+.stagger > * { animation: lhh-rise var(--t-enter) var(--ease-out) both; }
+.stagger > :nth-child(2) { animation-delay: 30ms } .stagger > :nth-child(3) { animation-delay: 60ms } .stagger > :nth-child(4) { animation-delay: 90ms }
+.stagger > :nth-child(5) { animation-delay: 120ms } .stagger > :nth-child(6) { animation-delay: 150ms } .stagger > :nth-child(7) { animation-delay: 180ms } .stagger > :nth-child(n+8) { animation-delay: 210ms }
+/* The sliding pill under the active tab or segment: a transition, so a quick second tap retargets mid-flight. */
+.pill { transition: transform var(--t-move) var(--ease-out), width var(--t-move) var(--ease-out); will-change: transform; }
+/* Toast: enters and leaves along the same path (up from the tab bar), as a transition so repeats retarget. */
+.toast { transition: transform var(--t-move) var(--ease-out), opacity var(--t-move) var(--ease-out); }
+.toast[data-hidden="true"] { transform: translateY(12px); opacity: 0; pointer-events: none; }
+.pulse { animation: lhh-pulse 1.2s ease-in-out infinite; }
+@keyframes lhh-pulse { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+
+/* Energy tab: moving dashes on the live-flow lines say "energy is moving", constant motion so linear. */
 @keyframes lhh-flow { to { stroke-dashoffset: -30; } }
 .flow-line { stroke-dasharray: 10 20; stroke-linecap: round; animation: lhh-flow 1.1s linear infinite; }
 .flow-line.rev { animation-direction: reverse; }
 .flow-line.idle { animation: none; stroke-dasharray: none; opacity: .12; }
+
+/* Reduced motion is gentler feedback, not none: keep opacity, drop travel and springiness. */
+@keyframes lhh-fade { from { opacity: 0 } }
+@media (prefers-reduced-motion: reduce) {
+  .enter, .enter-right, .enter-left, .stagger > * { animation: lhh-fade 160ms ease both; animation-delay: 0ms !important; }
+  .pill, .toast { transition-duration: 1ms; }
+  .flow-line { animation: none; stroke-dasharray: none; opacity: .5; }
+  .flow-line.idle { opacity: .12; }
+  button:active, [role="button"]:active, .tile:active, .scene:active, .chip:active { transform: none; opacity: .8; }
+}

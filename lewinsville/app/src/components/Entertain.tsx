@@ -27,7 +27,7 @@ export function Entertain({ house, call }: { house: House; call: Call }) {
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-extrabold">Moods</h2>
-          <span className="text-xs font-bold opacity-60">Kitchen keypad</span>
+          <span className="label">Kitchen keypad</span>
         </div>
         <div className="grid grid-cols-4 gap-2">
           {Object.entries(ENTERTAIN.moods).map(([k, m]) => (
@@ -41,11 +41,11 @@ export function Entertain({ house, call }: { house: House; call: Call }) {
         <section className="card p-4">
           <div className="mb-1 flex items-center justify-between">
             <h2 className="text-lg font-extrabold">Accent colour</h2>
-            <span className="text-xs font-bold opacity-60">{accents.map((a) => a.name).join(" + ")}</span>
+            <span className="label">{accents.map((a) => a.name).join(" + ")}</span>
           </div>
           <ColorRow ids={accents.map((a) => a.id)} call={call} />
           <div className="mt-2 flex items-center gap-3">
-            <span className="text-xs font-bold opacity-60">{drag ?? accentPct}%</span>
+            <span className="num w-10 text-xs font-bold text-ink-soft">{drag ?? accentPct}%</span>
             <input type="range" min={0} max={100} value={drag ?? accentPct} aria-label="Accent brightness" onChange={(e) => setDrag(Number(e.target.value))}
               onPointerUp={() => { if (drag != null) { call(drag === 0 ? { entity_ids: accents.map((a) => a.id), action: "turn_off" } : { entity_ids: accents.map((a) => a.id), action: "set_brightness", value: drag }); setDrag(null); } }} />
           </div>
@@ -55,7 +55,7 @@ export function Entertain({ house, call }: { house: House; call: Call }) {
       <section className="card p-4">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-extrabold">Everything here</h2>
-          <span className="text-xs font-bold opacity-60">{on.length} of {lights.length} lights on</span>
+          <span className="label">{on.length} of {lights.length} lights on</span>
         </div>
         <div className="grid grid-cols-3 gap-2 text-sm font-bold">
           <button className="rounded-2xl bg-sky/25 py-3" onClick={() => call({ entity_ids: lights.map((l) => l.id), action: "set_color_temp", value: 4000 })}>Cool white</button>
@@ -83,7 +83,7 @@ export function Entertain({ house, call }: { house: House; call: Call }) {
 
       {covers.length > 0 && (
         <section className="card p-4">
-          <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-extrabold">Shades</h2><span className="text-xs font-bold opacity-60">{covers.length} down here</span></div>
+          <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-extrabold">Shades</h2><span className="label">{covers.length} down here</span></div>
           <div className="grid grid-cols-2 gap-2 font-bold">
             <button className="rounded-2xl bg-sky/25 py-3" onClick={() => call({ entity_ids: covers.map((c) => c.id), action: "open" })}>Open all</button>
             <button className="rounded-2xl bg-indigo/25 py-3" onClick={() => call({ entity_ids: covers.map((c) => c.id), action: "close" })}>Close all</button>

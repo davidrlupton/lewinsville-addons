@@ -69,14 +69,14 @@ export function Chat({ enabled, name }: { enabled: boolean; name: string }) {
         {msgs.length === 0 && (
           <div className="card p-5">
             <div className="display text-2xl font-extrabold">Hi {name}. Tell me what you want.</div>
-            <p className="mt-1 text-sm opacity-70">Lights, shades, temperature, music, or the whole house at once.</p>
+            <p className="mt-1 text-sm text-ink-soft">Lights, shades, temperature, music, or the whole house at once.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {starters.map((s) => <button key={s} className="rounded-full bg-marigold/30 px-3 py-2 text-sm font-bold" onClick={() => send(s)}>{s}</button>)}
             </div>
           </div>
         )}
         {msgs.map((m, i) => (
-          <div key={i} className={`max-w-[85%] rounded-3xl px-4 py-3 text-[15px] leading-snug ${m.role === "user" ? "ml-auto bg-ink text-cream" : "card"}`}>
+          <div key={i} className={`enter max-w-[85%] rounded-3xl px-4 py-3 text-[15px] leading-snug ${m.role === "user" ? "ml-auto bg-ink text-cream" : "card"}`}>
             {m.text || <span className="pulse">…</span>}
           </div>
         ))}
@@ -84,8 +84,8 @@ export function Chat({ enabled, name }: { enabled: boolean; name: string }) {
       </div>
       <form className="flex items-center gap-2 pt-2" onSubmit={(e) => { e.preventDefault(); send(input); }}>
         <button type="button" onClick={mic} aria-label="talk" className="h-12 w-12 shrink-0 rounded-full text-xl" style={{ background: listening ? "var(--rani)" : "var(--peacock)", color: "white" }}>{listening ? "●" : "🎤"}</button>
-        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={enabled ? "Ask the house…" : "Chat not switched on yet"} disabled={!enabled}
-          className="h-12 flex-1 rounded-full bg-card px-4 text-[16px] outline-none ring-2 ring-transparent focus:ring-marigold" />
+        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder={enabled ? "Ask the house…" : "Chat not switched on yet"} disabled={!enabled} enterKeyHint="send" autoComplete="off"
+          className="h-12 min-w-0 flex-1 rounded-full bg-card px-4 text-[16px] outline-none ring-2 ring-transparent transition-shadow focus:ring-marigold" />
         <button type="submit" className="h-12 rounded-full bg-saffron px-4 font-bold text-white disabled:opacity-40" disabled={!enabled || !input.trim()}>Send</button>
         <button type="button" onClick={() => setSpeak(!speak)} className="h-12 w-12 rounded-full bg-card text-lg" aria-label="speak replies">{speak ? "🔊" : "🔇"}</button>
       </form>

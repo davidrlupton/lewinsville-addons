@@ -53,3 +53,23 @@ Room photos come later and become the room pages' backgrounds.
 - Cloudflare Access in front of lewinsville.vip and the app's hostname; then route the app through the tunnel.
 - Voice PE: HA Assist pipeline with the Anthropic conversation agent (same key).
 - Push alerts to phones (HA Companion app), room photos, per-person favourites, kiosk mode for the iPad.
+
+## Design system (0.2.0, 2026-11-01)
+
+The portal follows Emil Kowalski's apple-design and design-engineering skills (installed under `~/.claude/skills`,
+source github.com/emilkowalski/skills). The rules that matter when adding a screen:
+
+- **Type**: the system font (`--font-body`, `--font-display`), no web fonts. Large text tightens (`.display`), tiny
+  labels open up (`.label`). Any number that can change sits in `.num` so digits don't jitter.
+- **Response**: every pressable scales to 0.97 on pointer-down through one global rule in `globals.css`; never add
+  feedback on `click`. Hover effects live only inside `@media (hover: hover) and (pointer: fine)`.
+- **Materials**: `.card` for content, `.glass` for floating chrome (the tab bar, the toast). Never stack two glass
+  surfaces. `prefers-reduced-transparency` and `prefers-contrast` turn glass solid.
+- **Motion**: tokens `--ease-out`, `--t-press` (120 ms), `--t-enter` (220 ms), `--t-move` (240 ms); nothing over
+  300 ms. Screens use `.enter`; a push uses `.enter-right`, a pop `.enter-left`; a grid of tiles uses `.stagger`.
+  Exits are instant. Anything that can be re-triggered quickly (the tab pill, the toast) is a CSS transition, not a
+  keyframe, so it retargets mid-flight. `prefers-reduced-motion` swaps travel for a fade.
+- **Controls**: choices between a few options use `components/Segmented.tsx`; icons come from `components/Icons.tsx`
+  (22 px, 1.75 stroke). Whole-house actions keep the "tap again" confirmation; nothing else asks twice.
+- **Phone baseline**: `viewport-fit=cover` plus `env(safe-area-inset-*)` on fixed chrome, `100dvh`, 16 px inputs,
+  `overscroll-behavior: none` on the root, `touch-action: manipulation` on controls, theme-color per scheme and look.

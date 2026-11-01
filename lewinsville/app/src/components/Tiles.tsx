@@ -32,7 +32,7 @@ export function LightTile({ d, call, color }: { d: Device; call: Call; color: st
     <div className="tile" style={{ background: on ? `var(--on, ${color})` : "var(--card)", color: on ? "var(--on-ink)" : "var(--ink)" }}>
       <button className="flex w-full items-center justify-between gap-3" onClick={() => call({ entity_id: d.id, action: "toggle" })}>
         <span className="font-bold leading-tight">{d.name}</span>
-        <span className="text-xs font-bold opacity-70">{on ? `${drag ?? pct}%` : "off"}</span>
+        <span className="num text-xs font-bold opacity-70">{on ? `${drag ?? pct}%` : "off"}</span>
       </button>
       {on && (
         <input type="range" min={1} max={100} value={drag ?? pct} aria-label={`${d.name} brightness`}
@@ -55,7 +55,7 @@ export function FanTile({ d, call, color }: { d: Device; call: Call; color: stri
     <div className="tile" style={{ background: on ? `var(--on, ${color})` : "var(--card)", color: on ? "var(--on-ink)" : "var(--ink)" }}>
       <button className="flex w-full items-center justify-between gap-3" onClick={() => call({ entity_id: d.id, action: "toggle" })}>
         <span className="font-bold leading-tight">{d.name}</span>
-        <span className="text-xs font-bold opacity-70">{!on ? "off" : preset ? preset : `${drag ?? pct}%`}</span>
+        <span className="num text-xs font-bold opacity-70">{!on ? "off" : preset ? preset : `${drag ?? pct}%`}</span>
       </button>
       {on && (
         <input type="range" min={0} max={100} value={drag ?? pct} aria-label={`${d.name} speed`}
@@ -96,7 +96,7 @@ export function CoverTile({ d, call, color }: { d: Device; call: Call; color: st
     <div className="tile" style={{ background: open ? `var(--on, ${color})` : "var(--card)", color: open ? "var(--on-ink)" : "var(--ink)" }}>
       <button className="flex w-full items-center justify-between gap-3" onClick={() => call({ entity_id: d.id, action: open ? "close" : "open" })}>
         <span className="font-bold leading-tight">{d.name}</span>
-        <span className="text-xs font-bold opacity-70">{label}</span>
+        <span className="num text-xs font-bold opacity-70">{label}</span>
       </button>
       {wholeOnly ? (
         <div className="mt-2 grid grid-cols-2 gap-2 text-sm font-bold">
@@ -125,13 +125,13 @@ export function ClimateCard({ d, call, big = false }: { d: Device; call: Call; b
       <div className="flex items-start justify-between">
         <div>
           <div className="font-bold">{d.room}</div>
-          <div className="text-xs font-bold uppercase tracking-wide" style={{ color: tint }}>{d.state === "off" ? "off" : action}{hum != null ? ` · ${hum}% rh` : ""}</div>
+          <div className="label" style={{ color: tint }}>{d.state === "off" ? "off" : action}{hum != null ? ` · ${hum}% rh` : ""}</div>
         </div>
         <div className="display text-4xl font-extrabold">{cur ?? "–"}°</div>
       </div>
       <div className="mt-3 flex items-center justify-between gap-3">
         <button className="h-12 w-12 rounded-full bg-indigo/15 text-2xl font-bold" onClick={() => set != null && call({ entity_id: d.id, action: "set_temperature", value: set - 1 })}>−</button>
-        <div className="text-center"><div className="text-xs font-bold uppercase opacity-60">set to</div><div className="display text-3xl font-extrabold">{set ?? "–"}°</div></div>
+        <div className="text-center"><div className="label">set to</div><div className="display text-3xl font-extrabold">{set ?? "–"}°</div></div>
         <button className="h-12 w-12 rounded-full bg-saffron/20 text-2xl font-bold" onClick={() => set != null && call({ entity_id: d.id, action: "set_temperature", value: set + 1 })}>+</button>
       </div>
       {(big || modes.length) && (
@@ -154,7 +154,7 @@ export function MediaCard({ d, call }: { d: Device; call: Call }) {
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0"><div className="truncate font-bold">{d.name}</div><div className="truncate text-sm opacity-70">{title}{artist ? ` · ${artist}` : ""}</div></div>
+        <div className="min-w-0"><div className="truncate font-bold">{d.name}</div><div className="truncate text-sm text-ink-soft">{title}{artist ? ` · ${artist}` : ""}</div></div>
         <button className="h-12 w-12 shrink-0 rounded-full text-xl font-bold" style={{ background: playing ? "var(--rani)" : "var(--peacock)", color: "white" }}
           onClick={() => call({ entity_id: d.id, action: playing ? "pause" : "play" })}>{playing ? "❚❚" : "▶"}</button>
       </div>

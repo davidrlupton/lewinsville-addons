@@ -70,7 +70,7 @@ export function Sounds({ me }: { me: Me | null }) {
     <section className="card p-4">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-lg font-extrabold">Sounds</h2>
-        <span className="text-xs font-bold opacity-60">{sounds.length ? `${sounds.length} saved` : "say something to the house"}</span>
+        <span className="label">{sounds.length ? `${sounds.length} saved` : "say something to the house"}</span>
       </div>
 
       {canAdd && (
@@ -96,14 +96,14 @@ export function Sounds({ me }: { me: Me | null }) {
       {note && <div className="mb-3 rounded-xl px-3 py-2 text-xs font-bold" style={{ background: "var(--saffron)", color: "white" }}>{note}</div>}
 
       {sounds.length === 0 ? (
-        <div className="text-sm opacity-70">{canAdd ? "Record a good morning for the kids and play it from anywhere." : "Nothing recorded yet."}</div>
+        <div className="text-sm text-ink-soft">{canAdd ? "Record a good morning for the kids and play it from anywhere." : "Nothing recorded yet."}</div>
       ) : (
         <ul className="space-y-2">
           {sounds.map((s) => (
             <li key={s.id} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: "var(--cream)" }}>
               <div className="min-w-0 flex-1">
                 <div className="truncate font-bold">{s.name}</div>
-                <div className="text-[11px] opacity-60">{s.who}{s.seconds != null ? ` · ${s.seconds}s` : ""}</div>
+                <div className="num text-[11px] text-ink-soft">{s.who}{s.seconds != null ? ` · ${s.seconds}s` : ""}</div>
               </div>
               {speakers.map((sp) => (
                 <button key={sp.key} className="rounded-full px-3 py-1.5 text-xs font-extrabold text-white" style={{ background: "var(--peacock)", opacity: busy === `${s.id}:${sp.key}` ? .5 : 1 }} onClick={() => play(s.id, sp.key)} disabled={!!busy}>▶ {sp.label}</button>
