@@ -15,7 +15,7 @@ const unitStore = {
 };
 /** Format kWh in the chosen unit: '12.3 kWh' or '$2.21'. */
 const fmtE = (v: number, unit: Unit, rate: number | null) => (unit === "usd" && rate ? `$${((v * rate) / 100).toFixed(v * rate / 100 >= 100 ? 0 : 2)}` : `${kwh(v)} kWh`);
-const SUN = "var(--marigold)", GRID = "var(--saffron)", BATT = "var(--peacock)", HOME = "var(--ink)", BOUGHT = "var(--ink-soft)";
+const SUN = "var(--marigold)", GRID = "var(--saffron)", SOLD = "var(--leaf)", BATT = "var(--peacock)", HOME = "var(--ink)", BOUGHT = "var(--ink-soft)";
 
 /** The whole home first: live flow, then what the range added up to. Detail (per circuit, per cube) only for owners. */
 export function Energy({ detail }: { detail: boolean }) {
@@ -53,14 +53,7 @@ export function Energy({ detail }: { detail: boolean }) {
         <div className="my-3 grid grid-cols-4 gap-1 text-xs font-bold">
           {RANGES.map(([k, l]) => <button key={k} className="rounded-full py-1.5" style={{ background: range === k ? "var(--ink)" : "var(--cream)", color: range === k ? "var(--cream)" : "var(--ink)" }} onClick={() => setRange(k)}>{l}</button>)}
         </div>
-        {e.totals.load > 0 ? (
-          <p className="text-sm leading-snug">
-            {unit === "usd"
-              ? <>The house used <b>{f(e.totals.load)}</b> of electricity {rangeWord}; the sun made <b>{f(e.totals.solar)}</b> worth.</>
-              : <>The house used <b>{kwh(e.totals.load)} kWh</b> {rangeWord}; the sun made <b>{kwh(e.totals.solar)} kWh</b>.</>}
-            {e.totals.selfPct != null && <> <b>{e.totals.selfPct}%</b> of what we used was our own sun and battery.</>}
-          </p>
-        ) : <p className="text-sm opacity-70">Nothing recorded {rangeWord} yet.</p>}
+        {e.totals.load === 0 && <p className="text-sm opacity-70">Nothing {rangeWord} yet.</p>}
         {e.totals.selfPct != null && (
           <div className="mt-3">
             <div className="flex h-3 overflow-hidden rounded-full" style={{ background: "var(--cream)" }}>
@@ -71,20 +64,19 @@ export function Energy({ detail }: { detail: boolean }) {
           </div>
         )}
         <div className="mt-4 grid grid-cols-4 gap-1 text-center">
-          {([["Used", e.totals.load, HOME], ["Sun made", e.totals.solar, SUN], ["Bought", e.totals.gridIn, GRID], ["Sold", e.totals.gridOut, GRID]] as const).map(([k, v, c]) => (
+          {([["Used", e.totals.load, HOME], ["Sun made", e.totals.solar, SUN], ["Bought", e.totals.gridIn, GRID], ["Sold", e.totals.gridOut, SOLD]] as const).map(([k, v, c]) => (
             <div key={k}><div className="display text-xl font-extrabold" style={{ color: c }}>{unit === "usd" ? f(v) : kwh(v)}</div><div className="text-[10px] font-bold uppercase opacity-60">{k}{unit === "usd" && k === "Sun made" ? " (worth)" : ""}</div></div>
           ))}
         </div>
         {e.totals.load > 0 && (
-          <div className="mt-3 rounded-xl px-3 py-2 text-sm" style={{ background: "var(--cream)" }}>
-            {e.totals.net >= 0
-              ? <>Sold cancels bought, so Dominion counts <b>{kwh(e.totals.net)} kWh</b> net{e.totals.cost != null && <>, about <b>${e.totals.cost.toFixed(2)}</b></>}.</>
-              : <>We sent back <b>{kwh(-e.totals.net)} kWh</b> more than we bought{e.totals.cost != null && <>, a credit of about <b>${(-e.totals.cost).toFixed(2)}</b></>}.</>}
-            <span className="ml-1 text-xs opacity-60">{e.totals.rateCents != null ? `At ${e.totals.rateCents}¢ per kWh, the average price on recent bills; an estimate.` : "Net metering: a kWh sold cancels a kWh bought."}</span>
+          <div className="mt-3 flex items-center justify-between rounded-xl px-3 py-2 text-sm" style={{ background: "var(--cream)" }}
+            title={e.totals.rateCents != null ? `Net metering: a kWh sold cancels a kWh bought. Dollars at ${e.totals.rateCents}¢ per kWh, the average on recent bills.` : "Net metering: a kWh sold cancels a kWh bought."}>
+            <span className="font-bold">{e.totals.net >= 0 ? "Net from Dominion" : "Net credit"}</span>
+            <span className="tabular-nums"><b>{kwh(Math.abs(e.totals.net))} kWh</b>{e.totals.cost != null && <span className="ml-2 opacity-70">≈ ${Math.abs(e.totals.cost).toFixed(2)}</span>}</span>
           </div>
         )}
         <Chart series={e.series} range={e.range} />
-        {e.since && <div className="mt-2 text-xs opacity-60">Records start {e.since}.</div>}
+        {e.since && <div className="mt-2 text-xs opacity-60">Since {e.since}.</div>}
         {e.live.cubes < 2 && <div className="mt-2 text-xs opacity-60">Only one EP Cube is reporting, so these are half the house.</div>}
       </section>
 
@@ -101,7 +93,7 @@ export function Energy({ detail }: { detail: boolean }) {
                 <div className="flex items-center justify-between"><span className="font-bold">{c.name}</span>{c.soc != null && <span className="text-xs font-bold" style={{ color: BATT }}>battery {c.soc}%</span>}</div>
                 <div className="mt-1 grid grid-cols-3 gap-x-3 gap-y-0.5 text-xs opacity-80">
                   <span>Used {f(c.load)}</span><span>Sun {f(c.solar)}</span><span>Charged {f(c.battIn)}</span>
-                  <span>Bought {f(c.gridIn)}</span><span>Sold {f(c.gridOut)}</span><span>Gave back {f(c.battOut)}</span>
+                  <span>Bought {f(c.gridIn)}</span><span style={{ color: SOLD }}>Sold {f(c.gridOut)}</span><span>Gave back {f(c.battOut)}</span>
                 </div>
               </div>
             ))}
@@ -142,7 +134,7 @@ function Flow({ live }: { live: E["live"] }) {
         {line(50, buying || selling, selling, GRID, live.grid)}
         {line(83, charging || giving, charging, BATT, live.battery)}
       </svg>
-      <Node label="Home" value={kw(live.load)} sub="using right now" color={HOME} big />
+      <Node label="Home" value={kw(live.load)} sub="now" color={HOME} big />
     </section>
   );
 }
@@ -177,7 +169,7 @@ function Chart({ series, range }: { series: Bucket[]; range: Range }) {
       {anySold && (
         <div className="flex h-7 items-start gap-[2px]" style={{ borderTop: "1px solid var(--ink)" }} aria-label="Sold back to the grid">
           {series.map((s, i) => (
-            <div key={s.t} className="flex-1" style={{ height: `${(s.gridOut / maxOut) * 100}%`, background: GRID, opacity: i >= nowIdx ? .25 : .7, borderRadius: "0 0 2px 2px" }} title={`${s.label}: sold ${s.gridOut} kWh`} />
+            <div key={s.t} className="flex-1" style={{ height: `${(s.gridOut / maxOut) * 100}%`, background: SOLD, opacity: i >= nowIdx ? .25 : .85, borderRadius: "0 0 2px 2px" }} title={`${s.label}: sold ${s.gridOut} kWh`} />
           ))}
         </div>
       )}
@@ -188,7 +180,7 @@ function Chart({ series, range }: { series: Bucket[]; range: Range }) {
         <span><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: SUN }} />our own</span>
         <span><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: BOUGHT, opacity: .45 }} />bought</span>
         <span><i className="mr-1 inline-block w-3 border-t border-dashed align-middle" style={{ borderColor: "var(--ink)" }} />sun made</span>
-        {anySold && <span><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: GRID, opacity: .7 }} />sold, below the line</span>}
+        {anySold && <span><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: SOLD, opacity: .85 }} />sold</span>}
       </div>
     </div>
   );

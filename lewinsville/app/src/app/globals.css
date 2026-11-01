@@ -16,6 +16,7 @@
   --indigo: #3949ab;
   --sky: #29b6f6;
   --lime: #c0ca33;
+  --leaf: #43a047;
   --on-ink: #1c1240;
   --floor-first: var(--marigold); --floor-second: var(--rani); --floor-loft: var(--indigo); --floor-basement: var(--peacock); --floor-exterior: var(--saffron);
   --scene-welcome: var(--marigold); --scene-day: var(--sky); --scene-night: var(--indigo); --scene-away: var(--saffron);
@@ -30,7 +31,7 @@
 :root[data-theme="slate"] {
   --cream: #f2f3f5; --ink: #141720; --ink-soft: #626a7a; --card: #ffffff; --line: #e4e6ea;
   --on: #f3cf6d; --on-ink: #1b1a14;
-  --marigold: #f3cf6d; --saffron: #b4532a; --rani: #141720; --peacock: #3d4452; --indigo: #cfd3da; --sky: #e2e5ea; --lime: #9aa3b2;
+  --marigold: #f3cf6d; --saffron: #b4532a; --rani: #141720; --peacock: #3d4452; --indigo: #cfd3da; --sky: #e2e5ea; --lime: #9aa3b2; --leaf: #5f9a6e;
   --floor-first: var(--ink-soft); --floor-second: var(--ink-soft); --floor-loft: var(--ink-soft); --floor-basement: var(--ink-soft); --floor-exterior: var(--ink-soft);
   --scene-welcome: var(--card); --scene-day: var(--card); --scene-night: var(--card); --scene-away: var(--card);
   --radius-card: 1rem; --radius-tile: .8rem;
