@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Apply the remembered look before first paint so the page never flashes the other one. */}
         <script dangerouslySetInnerHTML={{ __html: 'try{var t=localStorage.getItem("lhh-theme");if(t)document.documentElement.dataset.theme=t}catch(e){}' }} />

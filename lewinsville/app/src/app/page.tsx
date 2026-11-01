@@ -146,10 +146,10 @@ export default function Page() {
         room === null ? (
           <div key="rooms-list" className={`${pop ? "enter-left" : "enter"} space-y-5`}>
             <div className="grid grid-cols-1 gap-2">
-              <button className="card jaali flex h-16 w-full items-center justify-between px-4 text-left text-white shadow-lg" style={{ background: "var(--scene-night)" }} onClick={() => goRoom("primary_suite")}>
+              <button className="card scene jaali flex h-16 w-full items-center justify-between px-4 text-left text-white shadow-lg" style={{ background: "var(--scene-night)" }} onClick={() => goRoom("primary_suite")}>
                 <span className="text-lg font-extrabold">Primary Suite</span><span className="text-xs font-bold opacity-80">bedroom · bath · closet</span>
               </button>
-              <button className="card jaali flex h-16 w-full items-center justify-between px-4 text-left text-white shadow-lg" style={{ background: "var(--scene-welcome)" }} onClick={() => goRoom("lounge")}>
+              <button className="card scene jaali flex h-16 w-full items-center justify-between px-4 text-left text-white shadow-lg" style={{ background: "var(--scene-welcome)" }} onClick={() => goRoom("lounge")}>
                 <span className="text-lg font-extrabold">Lounge</span><span className="text-xs font-bold opacity-80">living · kitchen · dining</span>
               </button>
             </div>

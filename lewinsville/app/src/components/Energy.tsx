@@ -49,20 +49,12 @@ export function Energy({ detail }: { detail: boolean }) {
         </div>
         <div className="my-3"><Segmented value={range} options={RANGES} onChange={setRange} size="md" label="Range" /></div>
         {e.totals.load === 0 && <p className="text-sm opacity-70">Nothing {rangeWord} yet.</p>}
-        {e.totals.selfPct != null && (
-          <div className="mt-3">
-            <div className="flex h-3 overflow-hidden rounded-full" style={{ background: "var(--cream)" }}>
-              <div style={{ width: `${e.totals.selfPct}%`, background: SUN }} />
-              <div style={{ width: `${100 - e.totals.selfPct}%`, background: BOUGHT, opacity: .45 }} />
-            </div>
-            <div className="num mt-1 flex justify-between text-[11px] font-bold text-ink-soft"><span>Our own {e.totals.selfPct}%</span><span>Bought {100 - e.totals.selfPct}%</span></div>
-          </div>
-        )}
-        <div className="mt-4 grid grid-cols-4 gap-1 text-center">
+        <div className="mt-3 grid grid-cols-4 gap-1 text-center">
           {([["Used", e.totals.load, HOME], ["Sun made", e.totals.solar, SUN], ["Bought", e.totals.gridIn, GRID], ["Sold", e.totals.gridOut, SOLD]] as const).map(([k, v, c]) => (
             <div key={k}><div className="display text-xl font-extrabold" style={{ color: c }}>{unit === "usd" ? f(v) : kwh(v)}</div><div className="label mt-0.5">{k}</div></div>
           ))}
         </div>
+        <Where t={e.totals} f={f} />
         {e.totals.load > 0 && (
           <div className="mt-3 flex items-center justify-between rounded-xl px-3 py-2 text-sm" style={{ background: "var(--cream)" }}
             title={e.totals.rateCents != null ? `Net metering: a kWh sold cancels a kWh bought. Dollars at ${e.totals.rateCents}¢ per kWh, the average on recent bills.` : "Net metering: a kWh sold cancels a kWh bought."}>
@@ -95,6 +87,30 @@ export function Energy({ detail }: { detail: boolean }) {
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/** The two sums nobody can do in their head: where the home's energy came from, and where the sun's went.
+ *  The battery sits in both, which is why "sun made" can beat "used" on a day we still bought from the grid. */
+function Where({ t, f }: { t: E["totals"]; f: (v: number) => string }) {
+  const rows: [string, number, string | null, [string, number, string][]][] = [
+    ["Home used", t.load, t.selfPct != null ? `our own ${t.selfPct}%` : null, [["from the sun", Math.max(0, t.load - t.gridIn - t.battOut), SUN], ["from the battery", t.battOut, BATT], ["bought", t.gridIn, GRID]]],
+    ["Sun made", t.solar, null, [["to the home", Math.max(0, t.solar - t.battIn - t.gridOut), SUN], ["into the battery", t.battIn, BATT], ["sold", t.gridOut, SOLD]]],
+  ];
+  return (
+    <div className="mt-4 space-y-3">
+      {rows.map(([label, total, note, parts]) => total > 0 && (
+        <div key={label}>
+          <div className="flex items-baseline justify-between text-xs"><span className="font-bold">{label} <span className="num">{f(total)}</span></span>{note && <span className="num font-bold text-ink-soft">{note}</span>}</div>
+          <div className="mt-1 flex h-2 overflow-hidden rounded-full" style={{ background: "var(--cream)" }}>
+            {parts.map(([k, v, c]) => <div key={k} style={{ width: `${Math.min(100, (v / total) * 100)}%`, background: c }} />)}
+          </div>
+          <div className="num mt-1 flex flex-wrap gap-x-3 text-[11px] text-ink-soft">
+            {parts.map(([k, v, c]) => <span key={k}><i className="mr-1 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: c }} />{k} <b>{f(v)}</b></span>)}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
