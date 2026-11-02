@@ -12,7 +12,7 @@ export function Segmented<T extends string>({ value, options, onChange, size = "
       <div aria-hidden className="pill pointer-events-none absolute bottom-0.5 left-0.5 top-0.5 rounded-full" style={{ width: `calc((100% - 4px) / ${n})`, transform: `translateX(${i * 100}%)`, background: "var(--ink)" }} />
       {options.map(([k, l]) => (
         <button key={k} type="button" aria-pressed={value === k} onClick={() => onChange(k)}
-          className={`relative z-10 flex-1 rounded-full font-bold ${size === "md" ? "px-4 py-2 text-sm" : "px-3 py-1 text-xs"}`}
+          className={`relative z-10 flex-1 whitespace-nowrap rounded-full font-bold ${size === "md" ? "px-4 py-2 text-sm" : "px-3 py-1 text-xs"}`}
           style={{ color: value === k ? "var(--cream)" : "var(--ink)" }}>{l}</button>
       ))}
     </div>

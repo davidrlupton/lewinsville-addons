@@ -7,7 +7,7 @@ import { Segmented } from "@/components/Segmented";
 
 type Kind = "on" | "hour" | "morning" | "off";
 type P = { email: string; name: string; role: string; wifiOnly: boolean; device?: string; home: boolean | null; pause: { kind: Kind; until: string | null; by: string } | null };
-const KINDS = [["on", "On"], ["hour", "1 hr"], ["morning", "Till 7 am"], ["off", "Off"]] as const;
+const KINDS = [["on", "On"], ["hour", "1 hour"], ["morning", "Till 7 am"], ["off", "Off"]] as const;
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 function line(p: P) {
@@ -33,14 +33,12 @@ export function People() {
       <div className="mb-3 flex items-baseline justify-between"><h2 className="text-lg font-extrabold">People</h2><span className="label">owners only</span></div>
       <div className="space-y-3">
         {people.map((p) => (
-          <div key={p.email} className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
+          <div key={p.email}>
+            <div className="flex items-baseline justify-between gap-3">
               <div className="truncate font-extrabold">{p.name}</div>
               <div className="truncate text-xs text-ink-soft">{line(p)}</div>
             </div>
-            {p.role === "owner" ? <span className="label shrink-0">owner</span> : (
-              <div className="w-52 shrink-0"><Segmented value={p.pause?.kind ?? "on"} options={KINDS} onChange={(k) => set(p.email, k)} label={`${p.name} access`} /></div>
-            )}
+            {p.role !== "owner" && <div className="mt-1.5"><Segmented value={p.pause?.kind ?? "on"} options={KINDS} onChange={(k) => set(p.email, k)} label={`${p.name} access`} /></div>}
           </div>
         ))}
       </div>
