@@ -1,5 +1,5 @@
 name: Lewinsville Portal
-version: "0.2.2"
+version: "0.2.3"
 slug: lewinsville
 description: The family's app for the house, with the Claude house assistant. Served at lewinsville.vip through the Cloudflared tunnel.
 url: https://github.com/davidrlupton/Lewinsville
@@ -28,5 +28,7 @@ schema:
       name: str
       role: list(owner|household|guest)
       theme: list(festival|slate)?
+      wifi_only: bool?
+      device: str?
   dev_user_email: str?
   energy_rate_cents: float?

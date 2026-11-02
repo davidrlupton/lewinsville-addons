@@ -1,18 +1,20 @@
 // Recorded sounds: list (anyone signed in), add (owners and household), delete (owners), play (anyone).
-import { personFrom } from "@/lib/identity";
+import { gate } from "@/lib/gate";
 import { append } from "@/lib/log";
 import { addSound, listSounds, playSound, removeSound, SPEAKERS } from "@/lib/sounds";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  if (!personFrom(req.headers)) return Response.json({ error: "who are you?" }, { status: 401 });
+  const g = await gate(req);
+  if (g.deny) return g.deny;
   return Response.json({ sounds: await listSounds(), speakers: Object.entries(SPEAKERS).map(([k, v]) => ({ key: k, label: v.label })) });
 }
 
 export async function POST(req: Request) {
-  const person = personFrom(req.headers);
-  if (!person) return Response.json({ error: "who are you?" }, { status: 401 });
+  const g = await gate(req);
+  if (g.deny) return g.deny;
+  const person = g.person;
   const t0 = Date.now();
   const ct = req.headers.get("content-type") ?? "";
   try {
@@ -39,8 +41,9 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const person = personFrom(req.headers);
-  if (!person) return Response.json({ error: "who are you?" }, { status: 401 });
+  const g = await gate(req);
+  if (g.deny) return g.deny;
+  const person = g.person;
   if (person.role !== "owner") return Response.json({ error: "Owners only" }, { status: 403 });
   const id = new URL(req.url).searchParams.get("id") ?? "";
   return Response.json({ ok: await removeSound(id) });

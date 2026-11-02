@@ -9,6 +9,7 @@ import { Entertain } from "@/components/Entertain";
 import { Energy } from "@/components/Energy";
 import { Sounds } from "@/components/Sounds";
 import { Log } from "@/components/Log";
+import { People } from "@/components/People";
 
 const TABS: readonly (readonly [string, string, IconName])[] = [["home", "Home", "home"], ["rooms", "Rooms", "rooms"], ["energy", "Energy", "energy"], ["climate", "Climate", "climate"], ["talk", "Talk", "talk"]];
 type Tab = (typeof TABS)[number][0];
@@ -27,7 +28,7 @@ function suite(house: House): Room {
 }
 
 export default function Page() {
-  const { house, me, error, call } = useHouse();
+  const { house, me, error, call, blocked } = useHouse();
   const [tab, setTab] = useState<Tab>("home");
   const [room, setRoom] = useState<string | null>(null);
   const [pop, setPop] = useState(false);    // the list slides in from the left only when returning from a room
@@ -70,6 +71,16 @@ export default function Page() {
       <button className="rounded-2xl bg-sky/25 py-3" style={ring("open")} onClick={() => confirmThen("open", () => call({ entity_ids: covers.map((c) => c.id), action: "open" }))}>{armed === "open" ? "Tap again" : "Open all"}</button>
       <button className="rounded-2xl bg-ink/10 py-3" style={ring("half")} onClick={() => confirmThen("half", () => call({ entity_ids: covers.filter((c) => c.id !== "cover.living_room_shade").map((c) => c.id), action: "set_position", value: 50 }))}>{armed === "half" ? "Tap again" : "Halfway"}</button>
       <button className="rounded-2xl bg-indigo/25 py-3" style={ring("close")} onClick={() => confirmThen("close", () => call({ entity_ids: covers.map((c) => c.id), action: "close" }))}>{armed === "close" ? "Tap again" : "Close all"}</button>
+    </div>
+  );
+
+  // Turned away: paused by an owner, or a wifi-only person who is not in the house. One screen, one button.
+  if (blocked) return (
+    <div className="enter mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center px-4 text-center">
+      <div className="label mb-2">Lewinsville</div>
+      <h1 className="display text-2xl font-extrabold">Not right now</h1>
+      <p className="mt-2 text-ink-soft">{blocked}</p>
+      <button className="card mt-6 px-5 py-3 font-bold" onClick={() => location.reload()}>Try again</button>
     </div>
   );
 
@@ -139,6 +150,7 @@ export default function Page() {
           </section>
           {media.length > 0 && <section><h2 className="mb-2 text-lg font-extrabold">Playing</h2><div className="space-y-2">{media.map((d) => <MediaCard key={d.id} d={d} call={call} />)}</div></section>}
           <Sounds me={me} />
+          {me?.role === "owner" && <People />}
         </div>
       )}
 

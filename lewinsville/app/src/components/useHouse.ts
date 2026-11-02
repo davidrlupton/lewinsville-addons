@@ -2,16 +2,21 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { House } from "@/lib/house";
 
-export type Me = { email: string; name: string; role: string; theme: "festival" | "slate"; greeting: string; chat: boolean };
+export type Me = { email: string; name: string; role: string; theme: "festival" | "slate"; greeting: string; chat: boolean; wifiOnly?: boolean };
 
 export function useHouse() {
   const [house, setHouse] = useState<House | null>(null);
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<string | null>(null);   // turned away by the house (paused, or wifi-only and not here)
   const es = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    fetch("/api/me").then(async (r) => (r.ok ? setMe(await r.json()) : setError("Not signed in"))).catch(() => setError("Offline"));
+    fetch("/api/me").then(async (r) => {
+      if (r.ok) setMe(await r.json());
+      else if (r.status === 403) { es.current?.close(); setBlocked((await r.json().catch(() => ({}))).error ?? "Not right now."); }
+      else setError("Not signed in");
+    }).catch(() => setError("Offline"));
     const open = () => {
       es.current?.close();
       const s = new EventSource("/api/state");
@@ -31,5 +36,5 @@ export function useHouse() {
     return r.ok;
   }, []);
 
-  return { house, me, error, call };
+  return { house, me, error, call, blocked };
 }

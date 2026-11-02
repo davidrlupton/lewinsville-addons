@@ -2,12 +2,13 @@
 // anything changes (throttled). Simple and robust for a handful of phones.
 import { hub } from "@/lib/ha";
 import { getHouse } from "@/lib/house";
-import { personFrom } from "@/lib/identity";
+import { gate } from "@/lib/gate";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  if (!personFrom(req.headers)) return new Response("who are you?", { status: 401 });
+  const g = await gate(req);
+  if (g.deny) return g.deny;
   const h = hub();
   await h.connect();
   const enc = new TextEncoder();

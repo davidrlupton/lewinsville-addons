@@ -1,15 +1,16 @@
 // Talk to the house. Body: { messages: BetaMessageParam[] } (the client keeps the transcript).
 // Streams SSE: {text} deltas, then {done, content} with the assistant turn to append.
 import { chat, type ChatMessage } from "@/lib/claude";
-import { personFrom } from "@/lib/identity";
+import { gate } from "@/lib/gate";
 import { append, withNotes } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
-  const person = personFrom(req.headers);
-  if (!person) return new Response("who are you?", { status: 401 });
+  const g = await gate(req);
+  if (g.deny) return g.deny;
+  const person = g.person;
   const { messages } = (await req.json()) as { messages: ChatMessage[] };
   if (!process.env.ANTHROPIC_API_KEY) return Response.json({ error: "no_api_key" }, { status: 503 });
   const enc = new TextEncoder();

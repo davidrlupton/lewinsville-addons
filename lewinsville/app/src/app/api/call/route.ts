@@ -2,13 +2,16 @@
 import { act } from "@/lib/claude";
 import { hub } from "@/lib/ha";
 import { SCENES, ENTERTAIN } from "@/lib/house";
-import { personFrom } from "@/lib/identity";
+import { gate } from "@/lib/gate";
 import { append } from "@/lib/log";
 
 export async function POST(req: Request) {
-  const person = personFrom(req.headers);
-  if (!person) return Response.json({ error: "who are you?" }, { status: 401 });
   const body = await req.json().catch(() => ({}));
+  // One breather key per thing: a scene, a mood, or the first entity touched (on/off/on/off on one light counts together).
+  const key = body.scene ? "scene" : body.mood ? "mood" : String(Array.isArray(body.entity_ids) ? body.entity_ids[0] : body.entity_id ?? "?");
+  const g = await gate(req, key);
+  if (g.deny) return g.deny;
+  const person = g.person;
   const t0 = Date.now();
   const log = (asked: string, did: string[], ok: boolean) => void append({ source: "button", who: person.name, asked, reply: "", did, ms: Date.now() - t0, ok });
   try {
