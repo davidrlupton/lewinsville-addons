@@ -127,6 +127,9 @@ button:disabled:active { transform: none; }
 }
 
 .chip { width: 2rem; height: 2rem; border-radius: 9999px; border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line), 0 2px 6px rgba(0,0,0,.15); flex: none; }
+/* The colour in use wears a ring in the ink colour, a gap of card between, and sits a touch larger. The ring moves with the chip's own transition. */
+.chip[aria-checked="true"] { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink), 0 2px 6px rgba(0,0,0,.15); transform: scale(1.1); }
+.chip[aria-checked="true"]:active { transform: scale(1.02); }
 
 /* Range sliders: a thumb a thumb can find. Native tracking is already 1:1 with the finger. */
 input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; accent-color: var(--marigold); touch-action: pan-x; cursor: pointer; }

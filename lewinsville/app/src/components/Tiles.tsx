@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NO_PARTIAL_COVERS, supportsColor, type Device } from "@/lib/house";
 
 type Call = (body: Record<string, unknown>) => Promise<boolean>;
@@ -13,11 +13,41 @@ export const COLORS: { name: string; hs?: [number, number]; k?: number; swatch: 
   { name: "Amber", hs: [38, 100], swatch: "hsl(38 100% 55%)" }, { name: "Coral", hs: [12, 80], swatch: "hsl(12 80% 58%)" }, { name: "Rose", hs: [335, 70], swatch: "hsl(335 70% 60%)" },
   { name: "Violet", hs: [272, 70], swatch: "hsl(272 70% 60%)" }, { name: "Blue", hs: [220, 85], swatch: "hsl(220 85% 58%)" }, { name: "Teal", hs: [176, 80], swatch: "hsl(176 80% 42%)" }, { name: "Green", hs: [120, 65], swatch: "hsl(120 65% 45%)" },
 ];
-export function ColorRow({ ids, call, whiteOnly = false }: { ids: string[]; call: Call; whiteOnly?: boolean }) {
+/** The preset a light is showing now, by nearest white temperature (within 450 K) or nearest hue, or null. */
+export function currentColor(d: Device): string | null {
+  if (d.state !== "on") return null;
+  const k = d.attrs.color_temp_kelvin;
+  if (d.attrs.color_mode === "color_temp" && typeof k === "number") {
+    let best: string | null = null, gap = 450;
+    for (const c of COLORS) if (c.k && Math.abs(c.k - k) < gap) { gap = Math.abs(c.k - k); best = c.name; }
+    return best;
+  }
+  if (Array.isArray(d.attrs.hs_color)) {
+    const [h, s] = d.attrs.hs_color as number[];
+    let best: string | null = null, gap = 20;
+    for (const c of COLORS) if (c.hs) {
+      const dh = Math.min(Math.abs(c.hs[0] - h), 360 - Math.abs(c.hs[0] - h)), dist = dh + Math.abs(c.hs[1] - s) / 4;
+      if (dist < gap) { gap = dist; best = c.name; }
+    }
+    return best;
+  }
+  return null;
+}
+/** The chips. `selected` is the preset in use, which gets the ring; tapping another moves the ring there at once. */
+export function ColorRow({ ids, call, whiteOnly = false, selected = null }: { ids: string[]; call: Call; whiteOnly?: boolean; selected?: string | null }) {
+  const [picked, setPicked] = useState<string | null>(null);   // optimistic, until the light reports back
+  const shown = picked ?? selected;
+  const row = useRef<HTMLDivElement>(null);
+  // The row scrolls sideways; bring the colour in use into view so its ring is seen, without moving the page.
+  useEffect(() => {
+    const r = row.current, el = r?.querySelector<HTMLElement>('[aria-checked="true"]');
+    if (r && el && !picked) r.scrollTo({ left: Math.max(0, el.offsetLeft - (r.clientWidth - el.offsetWidth) / 2), behavior: "smooth" });
+  }, [selected, picked]);
   return (
-    <div className="scroll-x mt-2 flex gap-2 py-1">
+    <div ref={row} className="scroll-x mt-2 flex gap-2 py-1" role="radiogroup" aria-label="Colour">
       {COLORS.filter((c) => !whiteOnly || c.k).map((c) => (
-        <button key={c.name} className="chip" title={c.name} aria-label={c.name} style={{ background: c.swatch }}
+        <button key={c.name} className="chip" title={c.name} aria-label={c.name} role="radio" aria-checked={shown === c.name} style={{ background: c.swatch }}
+          onPointerDown={() => setPicked(c.name)} onBlur={() => setPicked(null)}
           onClick={() => call(c.hs ? { entity_ids: ids, action: "set_color", hs: c.hs } : { entity_ids: ids, action: "set_color_temp", value: c.k })} />
       ))}
     </div>
@@ -40,7 +70,7 @@ export function LightTile({ d, call, color }: { d: Device; call: Call; color: st
           onPointerUp={() => { if (drag != null) { call({ entity_id: d.id, action: "set_brightness", value: drag }); setDrag(null); } }}
           className="mt-2" />
       )}
-      {on && supportsColor(d) && <ColorRow ids={[d.id]} call={call} />}
+      {on && supportsColor(d) && <ColorRow ids={[d.id]} call={call} selected={currentColor(d)} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ENTERTAIN, supportsColor, type House } from "@/lib/house";
-import { ColorRow, DeviceTile, FLOOR_COLOR, MediaCard } from "@/components/Tiles";
+import { ColorRow, currentColor, DeviceTile, FLOOR_COLOR, MediaCard } from "@/components/Tiles";
 
 type Call = (body: Record<string, unknown>) => Promise<boolean>;
 
@@ -43,7 +43,7 @@ export function Entertain({ house, call }: { house: House; call: Call }) {
             <h2 className="text-lg font-extrabold">Accent colour</h2>
             <span className="label">{accents.map((a) => a.name).join(" + ")}</span>
           </div>
-          <ColorRow ids={accents.map((a) => a.id)} call={call} />
+          <ColorRow ids={accents.map((a) => a.id)} call={call} selected={(() => { const s = new Set(accents.map(currentColor)); return s.size === 1 ? [...s][0] : null; })()} />
           <div className="mt-2 flex items-center gap-3">
             <span className="num w-10 text-xs font-bold text-ink-soft">{drag ?? accentPct}%</span>
             <input type="range" min={0} max={100} value={drag ?? accentPct} aria-label="Accent brightness" onChange={(e) => setDrag(Number(e.target.value))}
