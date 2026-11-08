@@ -1,11 +1,19 @@
 // Talk to the house. Body: { messages: BetaMessageParam[] } (the client keeps the transcript).
-// Streams SSE: {text} deltas, then {done, content} with the assistant turn to append.
+// Streams SSE: {text} deltas, then {done, content, context}: the context (system) message and the assistant turn, both to append.
 import { chat, type ChatMessage } from "@/lib/claude";
 import { gate } from "@/lib/gate";
 import { append, withNotes } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
+
+// Keep the last 30 entries, but start on a user turn: a system (context) message can't be first, and an
+// assistant turn without its user turn is invalid.
+function trim(messages: ChatMessage[]): ChatMessage[] {
+  const m = messages.slice(-30);
+  const first = m.findIndex((x) => x.role === "user");
+  return first > 0 ? m.slice(first) : m;
+}
 
 export async function POST(req: Request) {
   const g = await gate(req);
@@ -21,7 +29,7 @@ export async function POST(req: Request) {
       const asked = typeof last === "string" ? last : Array.isArray(last) ? last.map((b) => ("text" in b ? b.text : "")).join(" ") : "";
       const did = await withNotes(async (did) => {
         try {
-          for await (const ev of chat(person, messages.slice(-30))) { if ("text" in ev && ev.text) reply += ev.text; ctrl.enqueue(enc.encode(`data: ${JSON.stringify(ev)}\n\n`)); }
+          for await (const ev of chat(person, trim(messages))) { if ("text" in ev && ev.text) reply += ev.text; ctrl.enqueue(enc.encode(`data: ${JSON.stringify(ev)}\n\n`)); }
         } catch (e) {
           ok = false; ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ error: (e as Error).message })}\n\n`));
         }

@@ -146,23 +146,33 @@ export async function act(entity_id: string, action: (typeof ACTIONS)[number], v
 
 export type ChatMessage = Anthropic.Beta.BetaMessageParam;
 
+// The transcript must be append-only: Claude's thinking blocks are bound to the exact system prompt and every
+// message before them, so a system prompt that changes each turn (time, house state) made the second turn of
+// every chat fail with "block is bound to a different conversation" (2026-11-08). The top-level system is now
+// frozen per person and the live context rides along as a mid-conversation system message that the client
+// keeps in its history. `drop_block` is the safety net for transcripts recorded before this change.
 /** Stream a reply. Yields text deltas; resolves with the final assistant content for the client to keep. */
 export async function* chat(person: Person, history: ChatMessage[]) {
   const house = await getHouse();
   const system = [
     { type: "text" as const, text: SYSTEM_BASE, cache_control: { type: "ephemeral" as const } },
-    { type: "text" as const, text: `You are talking to ${person.name} (${person.role}). Local time ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })}.\n\nHouse right now:\n${describeHouse(house)}` },
+    { type: "text" as const, text: `You are talking to ${person.name} (${person.role}).` },
   ];
+  const context = { role: "system", content: `Local time ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })}.
+
+House right now:
+${describeHouse(house)}` } as ChatMessage;
   const runner = client().beta.messages.toolRunner({
     model: MODEL,
     max_tokens: 4000,
     system,
     tools: tools(person),
-    messages: history,
+    messages: [...history, context],
     stream: true,
     max_iterations: 6,
     output_config: { effort: "low" },
-    betas: ["server-side-fallback-2026-07-01"],
+    thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } },
+    betas: ["server-side-fallback-2026-07-01", "thinking-binding-controls-2026-08-01"],
     fallbacks: "default",
   });
   for await (const stream of runner) {
@@ -170,8 +180,10 @@ export async function* chat(person: Person, history: ChatMessage[]) {
       if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") yield { text: ev.delta.text };
     }
     const msg = await stream.finalMessage();
+    const dropped = (msg as { input_transformations?: { type: string; reason?: string }[] }).input_transformations ?? [];
+    if (dropped.length) console.warn("chat: thinking blocks dropped", dropped.map((d) => `${d.type}:${d.reason ?? ""}`).join(", "));
     if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") break;
   }
   const final = await runner.done();
-  yield { done: true, content: final.content };
+  yield { done: true, content: final.content, context };
 }

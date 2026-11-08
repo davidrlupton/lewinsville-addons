@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-type Msg = { role: "user" | "assistant"; text: string; content?: unknown };
+// system = the live-context message the server added for a turn; kept so the transcript stays append-only (not shown).
+type Msg = { role: "user" | "assistant" | "system"; text: string; content?: unknown };
 type SR = { start: () => void; stop: () => void; onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null; onend: (() => void) | null; lang: string; interimResults: boolean };
 declare global { interface Window { webkitSpeechRecognition?: new () => SR; SpeechRecognition?: new () => SR } }
 
@@ -21,7 +22,7 @@ export function Chat({ enabled, name }: { enabled: boolean; name: string }) {
     const history = [...msgs, { role: "user" as const, text: t }];
     setMsgs(history);
     setBusy(true);
-    const api = history.map((m) => ({ role: m.role, content: m.role === "assistant" && m.content ? m.content : m.text }));
+    const api = history.map((m) => ({ role: m.role, content: m.role !== "user" && m.content ? m.content : m.text }));
     let reply = "";
     setMsgs([...history, { role: "assistant", text: "" }]);
     try {
@@ -29,7 +30,7 @@ export function Chat({ enabled, name }: { enabled: boolean; name: string }) {
       if (!r.ok || !r.body) { reply = r.status === 503 ? "Chat isn't switched on yet. David needs to add the key." : "Something went wrong."; }
       else {
         const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
-        let content: unknown;
+        let content: unknown; let context: Msg | undefined;
         for (;;) {
           const { value, done } = await reader.read(); if (done) break;
           buf += dec.decode(value, { stream: true });
@@ -38,11 +39,11 @@ export function Chat({ enabled, name }: { enabled: boolean; name: string }) {
             if (!p.startsWith("data: ")) continue;
             const ev = JSON.parse(p.slice(6));
             if (ev.text) { reply += ev.text; setMsgs([...history, { role: "assistant", text: reply }]); }
-            if (ev.done) content = ev.content;
+            if (ev.done) { content = ev.content; if (ev.context) context = { role: "system", text: "", content: ev.context.content }; }
             if (ev.error) reply += `\n(${ev.error})`;
           }
         }
-        setMsgs([...history, { role: "assistant", text: reply || "Done.", content }]);
+        setMsgs([...history, ...(context ? [context] : []), { role: "assistant", text: reply || "Done.", content }]);
         if (speak && reply && "speechSynthesis" in window) { const u = new SpeechSynthesisUtterance(reply); u.rate = 1.05; speechSynthesis.speak(u); }
         return;
       }
@@ -75,7 +76,7 @@ export function Chat({ enabled, name }: { enabled: boolean; name: string }) {
             </div>
           </div>
         )}
-        {msgs.map((m, i) => (
+        {msgs.map((m, i) => m.role === "system" ? null : (
           <div key={i} className={`enter max-w-[85%] rounded-3xl px-4 py-3 text-[15px] leading-snug ${m.role === "user" ? "ml-auto bg-ink text-cream" : "card"}`}>
             {m.text || <span className="pulse">…</span>}
           </div>
