@@ -51,7 +51,7 @@ async function tick() {
       }
     }
     await watchEar(h, pipelines);
-  } catch (e) { console.error("jarvis log:", (e as Error).message); }
+  } catch (e) { console.error("jarvis log:", (e as Error)?.message ?? JSON.stringify(e)); }
 }
 
 async function watchEar(h: ReturnType<typeof hub>, pipelines: { id: string; name: string }[]) {
