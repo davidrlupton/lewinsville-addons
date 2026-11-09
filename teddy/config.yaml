@@ -1,5 +1,5 @@
 name: Teddy
-version: "0.2.4"
+version: "0.2.5"
 slug: teddy
 description: Teddy on the Lenovo. Listens on the Jabra for "Hey Teddy", understands through the portal's Claude brain, answers in Ryan's voice through the Sonos, keeps listening for follow-ups. PLAN.md Phase 5.
 url: https://github.com/davidrlupton/Lewinsville
@@ -19,7 +19,7 @@ options:
   wake_word: hey_teddy
   pipeline: Lewinsville                     # whose speech-to-text to use (the pipeline's STT engine only)
   listen_timeout: 6                         # seconds to wait for speech after the wake word
-  silence_seconds: 0.7                      # silence that ends an utterance
+  silence_seconds: 0.55                     # silence that ends an utterance
   max_seconds: 12                           # hard stop for one utterance
   save_clips: true                          # keep each utterance as a WAV under /share/lewinsville/teddy-clips
   debug: true

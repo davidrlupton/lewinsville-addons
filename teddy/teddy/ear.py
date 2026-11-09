@@ -15,12 +15,13 @@ from collections import deque
 from datetime import datetime
 
 import websockets
+from aiohttp import web
 from pysilero_vad import SileroVoiceActivityDetector
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.client import AsyncTcpClient
 from wyoming.wake import Detect, Detection
 
-from .voice import Voice, play_wav
+from .voice import Voice, Player, pcm_of
 
 OPT = json.load(open("/data/options.json")) if os.path.exists("/data/options.json") else {}
 def opt(k, d): return OPT.get(k, d)
@@ -70,6 +71,7 @@ class Ear:
         self.preroll = deque(maxlen=int(1.0 / self.frame_s))  # last second, kept for the clip
         self.pipeline_id = None
         self.voice = Voice(opt)
+        self.say_queue: asyncio.Queue = asyncio.Queue()   # texts other parts of the house ask Teddy to speak (the puck's brain)
         os.makedirs(CLIP_DIR, exist_ok=True)
 
     # ---- wake -------------------------------------------------------------------------------------
@@ -93,7 +95,7 @@ class Ear:
                             log.info("wake: %s", d.name); detected.set(); return
                 rt = asyncio.create_task(reader())
                 ts = 0
-                while not detected.is_set():
+                while not detected.is_set() and self.say_queue.empty():
                     frame = await self.mic.read()
                     self.preroll.append(frame)
                     await client.write_event(AudioChunk(rate=RATE, width=WIDTH, channels=CH, audio=frame, timestamp=ts).event())
@@ -102,8 +104,9 @@ class Ear:
                         raise ConnectionError("wake server closed the stream")
                 try: await client.write_event(AudioStop(timestamp=ts).event())
                 except Exception: pass
+                rt.cancel()
                 await client.disconnect()
-                return time.monotonic()
+                return time.monotonic() if detected.is_set() else None   # None: something to say first
             except Exception as e:
                 log.warning("wake stage: %s; retrying in 3 s", e)
                 await asyncio.sleep(3)
@@ -151,7 +154,7 @@ class Ear:
                 prefix = bytes([handler])
                 async def pump():
                     try:
-                        while True:
+                        while not done.is_set():
                             f = await frames.get()
                             if f is None:
                                 await ws.send(prefix); return
@@ -225,18 +228,64 @@ class Ear:
             while True: self.preroll.append(await self.mic.read())
         except asyncio.CancelledError: pass
 
-    async def speak(self, text: str, timings: dict):
+    async def speak_stream(self, sentences, timings: dict):
+        """Synthesise each sentence as it arrives and play them back to back. The Sonos handoff runs while the
+        first sentence is still being written, so the first sound follows the first sentence, not the whole reply."""
         d = asyncio.create_task(self.drain())
+        prep = asyncio.create_task(self.voice.before_speaking())
+        player = Player(); await player.start()
+        q: asyncio.Queue = asyncio.Queue()
+        async def feed():
+            while (t := await q.get()) is not None:
+                wav = await t
+                pcm = pcm_of(wav) if wav else None
+                if not pcm: log.warning("no audio for a sentence"); continue
+                await prep
+                timings.setdefault("first_audio", time.monotonic())
+                await player.write(pcm)
+        feeder = asyncio.create_task(feed())
         try:
-            await self.voice.before_speaking()
-            wav = await self.voice.tts(text)
-            timings["tts_ready"] = time.monotonic()
-            if wav: await play_wav(wav)
-            else: log.warning("no audio for %r", text[:60])
+            async for s in sentences:
+                timings.setdefault("first_sentence", time.monotonic())
+                await q.put(asyncio.create_task(self.voice.tts(s)))
+        finally:
+            await q.put(None); await feeder
+            await prep
+            await player.finish()
             await asyncio.sleep(0.3)   # let the room settle before listening again
             await self.voice.after_speaking()
-        finally:
             d.cancel(); await d
+
+    # ---- speaking for others: POST /say {"text": ...} from the puck's brain (teddy_brain in HA) -------------
+    async def say_pending(self):
+        while not self.say_queue.empty():
+            text, fut = self.say_queue.get_nowait()
+            t = {}
+            async def one():
+                yield text
+            try:
+                await self.speak_stream(one(), t)
+                self.record({"at": datetime.now().isoformat(timespec="seconds"), "say": text[:300], "first_audio_ms": None})
+                if not fut.done(): fut.set_result(True)
+            except Exception as e:
+                log.warning("say: %s", e)
+                if not fut.done(): fut.set_exception(e)
+        self.preroll.clear()
+
+    async def serve(self):
+        async def say(req: web.Request):
+            if req.headers.get("x-teddy-token", "") != opt("teddy_token", ""): return web.json_response({"error": "forbidden"}, status=403)
+            body = await req.json(); text = str(body.get("text") or "").strip()
+            if not text: return web.json_response({"error": "no_text"}, status=400)
+            fut = asyncio.get_running_loop().create_future()
+            await self.say_queue.put((text, fut))
+            try: await asyncio.wait_for(fut, 60)
+            except Exception as e: return web.json_response({"error": str(e)}, status=502)
+            return web.json_response({"ok": True})
+        app = web.Application(); app.add_routes([web.post("/say", say), web.get("/health", lambda r: web.json_response({"ok": True}))])
+        runner = web.AppRunner(app); await runner.setup()
+        await web.TCPSite(runner, "0.0.0.0", 8099).start()
+        log.info("say endpoint on :8099")
 
     # ---- the loop ----------------------------------------------------------------------------------
     def record(self, rec: dict):
@@ -251,8 +300,11 @@ class Ear:
         await self.mic.start()
         log.info("listening for %r via %s; STT from pipeline %r; speak=%s", opt("wake_word", "hey_teddy"), opt("wake_uri", ""), opt("pipeline", ""), opt("speak", False))
         ms = lambda a, b: int((b - a) * 1000)
+        asyncio.create_task(self.serve())
         while True:
             since = await self.wait_for_wake()
+            if since is None:
+                await self.say_pending(); continue
             conversation = None; wait_s = opt("listen_timeout", 6); followup = False
             while True:
                 res = await self.listen_and_transcribe(since, wait_s)
@@ -264,13 +316,20 @@ class Ear:
                 text = res.get("text")
                 if not text or not opt("speak", False):
                     self.record(rec); break
-                reply = await self.voice.converse(text, conversation)
-                conversation = reply.get("conversation", conversation)
-                say = reply.get("text") or "Sorry, I can't think just now. Try the switch or the app?"
-                rec.update({"reply": say, "did": reply.get("did"), "think_ms": reply.get("ms"), "brain_status": reply.get("status")})
-                t["think_done"] = time.monotonic()
-                await self.speak(say, t)
-                rec["first_audio_ms"] = ms(t["speech_end"], t["tts_ready"]) if "tts_ready" in t and "speech_end" in t else None
+                outcome = {}
+                async def sentences():
+                    async for m in self.voice.converse_stream(text, conversation):
+                        if "sentence" in m: yield m["sentence"]
+                        if m.get("done"):
+                            outcome.update(m); t["think_done"] = time.monotonic()
+                            if m.get("error") and not m.get("text"):
+                                log.warning("brain: %s", m["error"]); yield "Sorry, I can't think just now. Try the switch or the app?"
+                await self.speak_stream(sentences(), t)
+                conversation = outcome.get("conversation", conversation)
+                rec.update({"reply": outcome.get("text"), "did": outcome.get("did"), "brain_error": outcome.get("error"),
+                            "first_sentence_ms": ms(t["speech_end"], t["first_sentence"]) if "first_sentence" in t and "speech_end" in t else None,
+                            "think_ms": ms(t["speech_end"], t["think_done"]) if "think_done" in t and "speech_end" in t else None,
+                            "first_audio_ms": ms(t["speech_end"], t["first_audio"]) if "first_audio" in t and "speech_end" in t else None})
                 self.record(rec)
                 follow_s = opt("followup_seconds", 8)
                 if follow_s <= 0: break

@@ -1,7 +1,7 @@
 """Teddy's mouth and brain connections: Home Assistant Cloud TTS (Ryan, en-GB) fetched through the Supervisor
-proxy and played with aplay on the hub's default output (the Lenovo line-out into the Sonos Amp), the Sonos
-snapshot/volume/restore around each reply, and the call to the portal's /api/converse (the one brain)."""
-import asyncio, json, logging, os, time, urllib.request, urllib.error
+proxy as 16 kHz mono WAV, the Sonos snapshot/volume/restore around each reply, and the call to the portal's
+/api/converse (the one brain), streamed sentence by sentence so speaking starts before the reply is finished."""
+import asyncio, json, logging, os, struct, threading, time, urllib.request, urllib.error
 from datetime import datetime
 
 log = logging.getLogger("teddy.voice")
@@ -19,6 +19,22 @@ def _http(method: str, url: str, body: dict | None = None, headers: dict | None 
         return e.code, e.read()
 
 
+def pcm_of(wav: bytes) -> bytes | None:
+    """The sample data of a 16 kHz mono 16-bit RIFF WAV, or None if it is anything else."""
+    if wav[:4] != b"RIFF" or wav[8:12] != b"WAVE": return None
+    i, fmt_ok = 12, False
+    while i + 8 <= len(wav):
+        cid, size = wav[i:i + 4], struct.unpack("<I", wav[i + 4:i + 8])[0]
+        if cid == b"fmt ":
+            tag, ch, rate, _, _, bits = struct.unpack("<HHIIHH", wav[i + 8:i + 24])
+            fmt_ok = (tag, ch, rate, bits) == (1, 1, 16000, 16)
+            if not fmt_ok: log.error("unexpected wav format tag=%s ch=%s rate=%s bits=%s", tag, ch, rate, bits)
+        elif cid == b"data":
+            return wav[i + 8:i + 8 + size] if fmt_ok else None
+        i += 8 + size + (size & 1)
+    return None
+
+
 class Voice:
     def __init__(self, opt):
         self.opt = opt
@@ -33,11 +49,11 @@ class Voice:
         if st >= 300: log.warning("%s.%s -> %s %s", domain, service, st, body[:200])
 
     async def tts(self, text: str) -> bytes | None:
-        """A WAV of `text` in Teddy's voice, or None."""
+        """A WAV of `text` in Teddy's voice, or None. HA ignores the engine's own audio_output here and serves
+        MP3; its preferred_* options make it transcode. Without them aplay played MP3 bytes as raw PCM: white
+        noise (2026-11-08)."""
         payload = {"engine_id": self.opt("tts_engine", "tts.home_assistant_cloud"), "message": text,
                    "language": self.opt("tts_language", "en-GB"),
-                   # HA ignores the engine's own audio_output here and serves MP3; its preferred_* options make it
-                   # transcode to what aplay can take. Without them aplay played MP3 bytes as raw PCM: white noise (2026-11-08).
                    "options": {"voice": self.opt("tts_voice", "RyanNeural"), "preferred_format": "wav",
                                "preferred_sample_rate": 16000, "preferred_sample_channels": 1, "preferred_sample_bytes": 2}}
         st, body = await self.ha("POST", "/api/tts_get_url", payload)
@@ -70,24 +86,37 @@ class Voice:
         await self.service("sonos", "restore", {"entity_id": sonos})
 
     # ---- the brain --------------------------------------------------------------------------------
-    async def converse(self, text: str, conversation: str | None) -> dict:
-        url = self.opt("portal_url", "http://90b47cbd-lewinsville:3000").rstrip("/") + "/api/converse"
-        headers = {"x-teddy-token": self.opt("teddy_token", "")}
-        t0 = time.monotonic()
-        try:
-            st, body = await asyncio.to_thread(_http, "POST", url, {"text": text, "conversation": conversation}, headers, 50)
-            out = json.loads(body or b"{}")
-        except Exception as e:
-            st, out = 0, {"error": f"{type(e).__name__}: {e}"}
-        out["ms"] = int((time.monotonic() - t0) * 1000); out["status"] = st
-        if st != 200: log.warning("converse -> %s %s", st, out.get("error"))
-        return out
+    async def converse_stream(self, text: str, conversation: str | None):
+        """Yield the portal's NDJSON objects: {"sentence": ...} as they come, then {"done": true, ...}."""
+        url = self.opt("portal_url", "http://90b47cbd-lewinsville:3000").rstrip("/") + "/api/converse?stream=1"
+        headers = {"Content-Type": "application/json", "x-teddy-token": self.opt("teddy_token", "")}
+        q: asyncio.Queue = asyncio.Queue(); loop = asyncio.get_running_loop()
+        def worker():
+            try:
+                req = urllib.request.Request(url, data=json.dumps({"text": text, "conversation": conversation}).encode(), method="POST", headers=headers)
+                with urllib.request.urlopen(req, timeout=50) as r:
+                    for line in r:
+                        if line.strip(): loop.call_soon_threadsafe(q.put_nowait, json.loads(line))
+            except urllib.error.HTTPError as e:
+                loop.call_soon_threadsafe(q.put_nowait, {"done": True, "error": f"{e.code} {e.read()[:200]!r}"})
+            except Exception as e:
+                loop.call_soon_threadsafe(q.put_nowait, {"done": True, "error": f"{type(e).__name__}: {e}"})
+            loop.call_soon_threadsafe(q.put_nowait, None)
+        threading.Thread(target=worker, daemon=True).start()
+        while (m := await q.get()) is not None:
+            yield m
 
 
-async def play_wav(wav: bytes):
-    """Play through the hub's default output (aplay via the PulseAudio ALSA plugin)."""
-    p = await asyncio.create_subprocess_exec("aplay", "-q", "-", stdin=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
-    try:
-        p.stdin.write(wav); await p.stdin.drain(); p.stdin.close()
-    except (BrokenPipeError, ConnectionResetError): pass
-    await p.wait()
+class Player:
+    """One aplay for a whole reply: sentences are appended as raw PCM, so there is no gap between them."""
+    def __init__(self): self.p = None
+    async def start(self):
+        self.p = await asyncio.create_subprocess_exec("aplay", "-q", "-r", "16000", "-c", "1", "-f", "S16_LE", "-t", "raw", "-",
+                                                      stdin=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+    async def write(self, pcm: bytes):
+        try: self.p.stdin.write(pcm); await self.p.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError): log.warning("player pipe closed")
+    async def finish(self):
+        try: self.p.stdin.close()
+        except Exception: pass
+        await self.p.wait()
