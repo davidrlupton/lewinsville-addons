@@ -67,6 +67,13 @@ class Voice:
             log.error("tts returned %r, not WAV; refusing to play it", audio[:4]); return None
         return audio
 
+    async def tv_on(self) -> bool:
+        """Is the living-room screen in use? Then its dialogue floods the follow-up window, so there is none."""
+        for e in ("media_player.home_theater_tv", "media_player.denon_living"):
+            st, body = await self.ha("GET", f"/api/states/{e}", timeout=5)
+            if st == 200 and json.loads(body).get("state") in ("on", "playing", "paused"): return True
+        return False
+
     # ---- Sonos ------------------------------------------------------------------------------------
     def quiet_now(self) -> bool:
         now = datetime.now().strftime("%H:%M")

@@ -334,7 +334,8 @@ class Ear:
                             "first_audio_ms": ms(t["speech_end"], t["first_audio"]) if "first_audio" in t and "speech_end" in t else None})
                 self.record(rec)
                 follow_s = opt("followup_seconds", 8)
-                if follow_s <= 0: break
+                if follow_s <= 0 or not outcome.get("text"): break      # nothing was said (SILENCE): no window
+                if await self.voice.tv_on(): log.info("tv on: no follow-up window"); break
                 since = time.monotonic(); wait_s = follow_s; followup = True
             self.preroll.clear()
 
