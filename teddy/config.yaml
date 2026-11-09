@@ -1,0 +1,34 @@
+name: Teddy
+version: "0.1.0"
+slug: teddy
+description: Teddy's ear on the Lenovo. Listens on the Jabra for "Hey Teddy", cuts the utterance, transcribes it. Step 1 of PLAN.md Phase 5, logging only; it does not speak yet.
+url: https://github.com/davidrlupton/Lewinsville
+arch: [amd64]
+startup: application
+boot: auto
+init: false
+hassio_api: true
+homeassistant_api: true
+# Same audio access the Assist Microphone add-on has: the hub's PulseAudio, so arecord/aplay reach the Jabra and
+# the built-in line-out. Several add-ons may record the same microphone at once.
+audio: true
+map:
+  - share:rw   # /share/lewinsville: the turn log (teddy-ear.jsonl) and, while save_clips is on, the clips
+options:
+  wake_uri: tcp://core-openwakeword:10400   # the openWakeWord add-on, which already has our hey_teddy model
+  wake_word: hey_teddy
+  pipeline: Lewinsville                     # whose speech-to-text to use (the pipeline's STT engine only)
+  listen_timeout: 6                         # seconds to wait for speech after the wake word
+  silence_seconds: 0.7                      # silence that ends an utterance
+  max_seconds: 12                           # hard stop for one utterance
+  save_clips: true                          # keep each utterance as a WAV under /share/lewinsville/teddy-clips
+  debug: true
+schema:
+  wake_uri: str
+  wake_word: str
+  pipeline: str
+  listen_timeout: float
+  silence_seconds: float
+  max_seconds: float
+  save_clips: bool
+  debug: bool

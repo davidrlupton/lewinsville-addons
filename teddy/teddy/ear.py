@@ -1,0 +1,215 @@
+"""Teddy's ear, step 1 (PLAN.md Phase 5): one loop on the Jabra.
+
+  wake   : stream the microphone to the openWakeWord add-on over Wyoming until it reports "hey_teddy"
+  listen : cut one utterance with Silero VAD (speech start within listen_timeout, end after silence_seconds)
+  stt    : stream the same audio to Home Assistant's speech-to-text stage of the chosen pipeline, get text
+  log    : one JSON line per turn in /share/lewinsville/teddy-ear.jsonl with per-stage timings
+
+Nothing is spoken yet and nothing is sent anywhere except HA's STT. Step 2 adds the brain and the voice.
+"""
+import asyncio, json, logging, os, sys, time, wave
+from collections import deque
+from datetime import datetime
+
+import websockets
+from pysilero_vad import SileroVoiceActivityDetector
+from wyoming.audio import AudioChunk, AudioStart, AudioStop
+from wyoming.client import AsyncTcpClient
+from wyoming.wake import Detect, Detection
+
+OPT = json.load(open("/data/options.json")) if os.path.exists("/data/options.json") else {}
+def opt(k, d): return OPT.get(k, d)
+
+RATE, WIDTH, CH = 16000, 2, 1
+LOG_DIR = "/share/lewinsville"
+CLIP_DIR = f"{LOG_DIR}/teddy-clips"
+HA_WS = os.environ.get("HA_WS_URL", "ws://supervisor/core/websocket")
+TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
+
+log = logging.getLogger("teddy")
+logging.basicConfig(level=logging.DEBUG if opt("debug", True) else logging.INFO,
+                    format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
+
+
+class Mic:
+    """arecord through the hub's PulseAudio, handed out in VAD-sized frames (512 samples, 32 ms)."""
+    def __init__(self, frame_bytes: int):
+        self.frame = frame_bytes; self.proc = None
+    async def start(self):
+        self.proc = await asyncio.create_subprocess_exec(
+            "arecord", "-q", "-r", str(RATE), "-c", str(CH), "-f", "S16_LE", "-t", "raw",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        log.info("microphone open (arecord pid %s)", self.proc.pid)
+    async def read(self) -> bytes:
+        data = await self.proc.stdout.readexactly(self.frame)
+        return data
+
+
+class Ear:
+    def __init__(self):
+        self.vad = SileroVoiceActivityDetector()
+        self.frame = self.vad.chunk_bytes()           # 1024 bytes = 32 ms
+        self.frame_s = self.frame / (RATE * WIDTH)
+        self.mic = Mic(self.frame)
+        self.preroll = deque(maxlen=int(1.0 / self.frame_s))  # last second, kept for the clip
+        self.pipeline_id = None
+        os.makedirs(CLIP_DIR, exist_ok=True)
+
+    # ---- wake -------------------------------------------------------------------------------------
+    async def wait_for_wake(self) -> float:
+        uri = opt("wake_uri", "tcp://core-openwakeword:10400")
+        host, port = uri.replace("tcp://", "").split(":")
+        name = opt("wake_word", "hey_teddy")
+        while True:
+            try:
+                client = AsyncTcpClient(host, int(port))
+                await client.connect()
+                await client.write_event(Detect(names=[name]).event())
+                await client.write_event(AudioStart(rate=RATE, width=WIDTH, channels=CH, timestamp=0).event())
+                detected = asyncio.Event()
+                async def reader():
+                    while True:
+                        ev = await client.read_event()
+                        if ev is None: return
+                        if Detection.is_type(ev.type):
+                            d = Detection.from_event(ev)
+                            log.info("wake: %s", d.name); detected.set(); return
+                rt = asyncio.create_task(reader())
+                ts = 0
+                while not detected.is_set():
+                    frame = await self.mic.read()
+                    self.preroll.append(frame)
+                    await client.write_event(AudioChunk(rate=RATE, width=WIDTH, channels=CH, audio=frame, timestamp=ts).event())
+                    ts += int(self.frame_s * 1000)
+                    if rt.done() and not detected.is_set():
+                        raise ConnectionError("wake server closed the stream")
+                try: await client.write_event(AudioStop(timestamp=ts).event())
+                except Exception: pass
+                await client.disconnect()
+                return time.monotonic()
+            except Exception as e:
+                log.warning("wake stage: %s; retrying in 3 s", e)
+                await asyncio.sleep(3)
+
+    # ---- speech to text through HA ----------------------------------------------------------------
+    async def pipeline(self, ws) -> str | None:
+        if self.pipeline_id is None:
+            r = await self.call(ws, {"type": "assist_pipeline/pipeline/list"})
+            want = opt("pipeline", "Lewinsville")
+            for p in r["pipelines"]:
+                if p["name"] == want: self.pipeline_id = p["id"]
+            if self.pipeline_id is None:
+                log.warning("pipeline %r not found, using the preferred one", want); self.pipeline_id = ""
+        return self.pipeline_id or None
+
+    _n = 0
+    async def call(self, ws, msg):
+        Ear._n += 1; msg["id"] = Ear._n
+        await ws.send(json.dumps(msg))
+        while True:
+            m = json.loads(await ws.recv())
+            if m.get("id") == msg["id"] and m.get("type") == "result":
+                if not m["success"]: raise RuntimeError(m.get("error"))
+                return m["result"]
+
+    async def transcribe(self, frames: "asyncio.Queue[bytes | None]", timings: dict) -> dict:
+        """Stream frames (None = end) to HA's STT stage. Returns {"text": ...} or {"error": ...}."""
+        out = {}
+        try:
+            async with websockets.connect(HA_WS, max_size=2**22) as ws:
+                await ws.recv()
+                await ws.send(json.dumps({"type": "auth", "access_token": TOKEN}))
+                ok = json.loads(await ws.recv()); assert ok["type"] == "auth_ok", ok
+                pid = await self.pipeline(ws)
+                Ear._n += 1
+                run = {"id": Ear._n, "type": "assist_pipeline/run", "start_stage": "stt", "end_stage": "stt",
+                       "input": {"sample_rate": RATE}, "timeout": 30}
+                if pid: run["pipeline"] = pid
+                await ws.send(json.dumps(run))
+                handler = None
+                while handler is None:
+                    m = json.loads(await ws.recv())
+                    if m.get("type") == "result" and not m.get("success"): raise RuntimeError(m.get("error"))
+                    if m.get("type") == "event" and m["event"]["type"] == "run-start":
+                        handler = m["event"]["data"]["runner_data"]["stt_binary_handler_id"]
+                prefix = bytes([handler])
+                async def pump():
+                    while True:
+                        f = await frames.get()
+                        if f is None:
+                            await ws.send(prefix); return
+                        await ws.send(prefix + f)
+                pt = asyncio.create_task(pump())
+                while True:
+                    m = json.loads(await asyncio.wait_for(ws.recv(), 20))
+                    if m.get("type") != "event": continue
+                    ev = m["event"]
+                    if ev["type"] == "stt-end":
+                        out["text"] = (ev["data"].get("stt_output") or {}).get("text", "").strip()
+                        timings["stt_done"] = time.monotonic()
+                    elif ev["type"] == "error":
+                        out["error"] = ev["data"].get("message") or ev["data"].get("code")
+                    elif ev["type"] == "run-end":
+                        break
+                await pt
+        except Exception as e:
+            out.setdefault("error", f"{type(e).__name__}: {e}")
+        return out
+
+    # ---- one turn ----------------------------------------------------------------------------------
+    async def listen_and_transcribe(self, woke: float) -> dict:
+        timings = {"wake": woke}
+        frames: asyncio.Queue = asyncio.Queue()
+        stt = asyncio.create_task(self.transcribe(frames, timings))
+        clip = list(self.preroll)                     # the half-second before the wake word ends
+        self.vad.reset()
+        silence = opt("silence_seconds", 0.7); max_s = opt("max_seconds", 12); wait_s = opt("listen_timeout", 6)
+        speaking = False; quiet = 0.0; started = time.monotonic(); speech_start = None
+        while True:
+            frame = await self.mic.read()
+            clip.append(frame); await frames.put(frame)
+            p = self.vad(frame)
+            now = time.monotonic()
+            if not speaking:
+                if p >= 0.5:
+                    speaking = True; speech_start = now; timings["speech_start"] = now
+                    log.debug("speech started %.2fs after wake", now - woke)
+                elif now - started > wait_s:
+                    log.info("nothing said within %.0fs", wait_s); break
+            else:
+                quiet = quiet + self.frame_s if p < 0.3 else 0.0
+                if quiet >= silence or now - speech_start > max_s:
+                    timings["speech_end"] = now - quiet
+                    log.debug("speech ended, %.2fs of speech", timings["speech_end"] - speech_start); break
+        await frames.put(None)
+        res = await stt
+        res["timings"] = timings
+        if speaking and opt("save_clips", True):
+            name = datetime.now().strftime("%Y%m%d-%H%M%S") + ".wav"
+            with wave.open(f"{CLIP_DIR}/{name}", "wb") as w:
+                w.setnchannels(CH); w.setsampwidth(WIDTH); w.setframerate(RATE); w.writeframes(b"".join(clip))
+            res["clip"] = name
+        return res
+
+    async def run(self):
+        await self.mic.start()
+        log.info("listening for %r via %s; STT from pipeline %r", opt("wake_word", "hey_teddy"), opt("wake_uri", ""), opt("pipeline", ""))
+        while True:
+            woke = await self.wait_for_wake()
+            res = await self.listen_and_transcribe(woke)
+            t = res["timings"]
+            rec = {"at": datetime.now().isoformat(timespec="seconds"), "text": res.get("text"), "error": res.get("error"),
+                   "clip": res.get("clip"),
+                   "speech_start_ms": int((t["speech_start"] - t["wake"]) * 1000) if "speech_start" in t else None,
+                   "speech_ms": int((t["speech_end"] - t["speech_start"]) * 1000) if "speech_end" in t else None,
+                   "stt_after_speech_ms": int((t["stt_done"] - t["speech_end"]) * 1000) if "stt_done" in t and "speech_end" in t else None}
+            log.info("turn: %s", json.dumps(rec))
+            try:
+                with open(f"{LOG_DIR}/teddy-ear.jsonl", "a", encoding="utf-8") as f: f.write(json.dumps(rec) + "\n")
+            except OSError as e: log.warning("log write: %s", e)
+            self.preroll.clear()
+
+
+if __name__ == "__main__":
+    try: asyncio.run(Ear().run())
+    except KeyboardInterrupt: sys.exit(0)
