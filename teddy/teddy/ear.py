@@ -127,8 +127,9 @@ class Ear:
             if not self.pipeline_id: log.warning("pipeline %r not found, using the preferred one", want)
         return self.pipeline_id or None
 
-    async def transcribe(self, frames: "asyncio.Queue[bytes | None]", timings: dict) -> dict:
-        """Stream frames (None = end) to HA's STT stage. Returns {"text": ...} and/or {"error": ...}."""
+    async def transcribe(self, frames: "asyncio.Queue[bytes | None]", timings: dict, done: asyncio.Event) -> dict:
+        """Stream frames (None = end) to HA's STT stage. Returns {"text": ...} and/or {"error": ...}.
+        Sets `done` as soon as HA has a result, so the listener stops even if our own VAD still hears the room."""
         out = {}
         try:
             async with websockets.connect(HA_WS, max_size=2**22) as ws:
@@ -149,11 +150,13 @@ class Ear:
                         handler = m["event"]["data"]["runner_data"]["stt_binary_handler_id"]
                 prefix = bytes([handler])
                 async def pump():
-                    while True:
-                        f = await frames.get()
-                        if f is None:
-                            await ws.send(prefix); return
-                        await ws.send(prefix + f)
+                    try:
+                        while True:
+                            f = await frames.get()
+                            if f is None:
+                                await ws.send(prefix); return
+                            await ws.send(prefix + f)
+                    except Exception: pass   # HA may have closed the run already; the result is what matters
                 pt = asyncio.create_task(pump())
                 while True:
                     m = json.loads(await asyncio.wait_for(ws.recv(), 20))
@@ -161,21 +164,23 @@ class Ear:
                     ev = m["event"]
                     if ev["type"] == "stt-end":
                         out["text"] = (ev["data"].get("stt_output") or {}).get("text", "").strip()
-                        timings["stt_done"] = time.monotonic()
+                        timings["stt_done"] = time.monotonic(); done.set()
                     elif ev["type"] == "error":
-                        out["error"] = ev["data"].get("message") or ev["data"].get("code")
+                        out["error"] = ev["data"].get("message") or ev["data"].get("code"); done.set()
                     elif ev["type"] == "run-end":
                         break
                 await pt
         except Exception as e:
             out.setdefault("error", f"{type(e).__name__}: {e}")
+        done.set()
         return out
 
     # ---- one utterance -----------------------------------------------------------------------------
     async def listen_and_transcribe(self, since: float, wait_s: float) -> dict:
         timings = {"wake": since}
         frames: asyncio.Queue = asyncio.Queue()
-        stt = asyncio.create_task(self.transcribe(frames, timings))
+        done = asyncio.Event()
+        stt = asyncio.create_task(self.transcribe(frames, timings, done))
         clip = list(self.preroll)
         self.vad.reset()
         silence = opt("silence_seconds", 0.7); max_s = opt("max_seconds", 12)
@@ -193,9 +198,9 @@ class Ear:
                     log.info("nothing said within %.0fs", wait_s); break
             else:
                 quiet = quiet + self.frame_s if p < 0.3 else 0.0
-                if quiet >= silence or now - speech_start > max_s:
-                    timings["speech_end"] = now - quiet
-                    log.debug("speech ended, %.2fs of speech", timings["speech_end"] - speech_start); break
+                if quiet >= silence or now - speech_start > max_s or done.is_set():
+                    timings["speech_end"] = min(now - quiet, timings.get("stt_done", now))
+                    log.debug("speech ended, %.2fs of speech%s", timings["speech_end"] - speech_start, " (HA finished first)" if done.is_set() and quiet < silence else ""); break
         await frames.put(None)
         if not speaking:
             stt.cancel()
