@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   const token = process.env.TEDDY_TOKEN;
   if (!token || req.headers.get("x-teddy-token") !== token) return Response.json({ error: "forbidden" }, { status: 403 });
   if (!process.env.ANTHROPIC_API_KEY) return Response.json({ error: "no_api_key" }, { status: 503 });
-  const { text, conversation } = (await req.json()) as { text?: string; conversation?: string };
+  const { text, conversation, who } = (await req.json()) as { text?: string; conversation?: string; who?: string };
   if (!text?.trim()) return Response.json({ error: "no_text" }, { status: 400 });
   const streaming = new URL(req.url).searchParams.get("stream") === "1";
 
@@ -81,7 +81,7 @@ export async function POST(req: Request) {
       } catch (e) { ok = false; error = (e as Error).message; }
       return did;
     });
-    void append({ source: "teddy", who: "Living Room Ear", asked: text.slice(0, 300), reply: (reply || error || "").slice(0, 500), did, ms: Date.now() - t0, ok });
+    void append({ source: "teddy", who: (who || "Teddy").slice(0, 40), asked: text.slice(0, 300), reply: (reply || error || "").slice(0, 500), did, ms: Date.now() - t0, ok });
     return { ok, error, reply, did };
   };
 

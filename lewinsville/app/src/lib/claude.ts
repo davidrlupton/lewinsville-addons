@@ -14,16 +14,13 @@ import { note } from "./log";
 export const MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
 export const VOICE_MODEL = process.env.CLAUDE_VOICE_MODEL ?? "claude-sonnet-5-5";
 
-// The spoken Teddy (the /api/converse route, called by the Teddy ear add-on): the one persona and the house
-// facts from ha/voice, copied into app/voice at publish. The "end with a question" paragraph was a workaround
-// for Home Assistant's pipeline, which closed the mic otherwise; our own ear keeps listening, so it is dropped.
+// The spoken Teddy (the /api/converse route, called by the Teddy add-on for both ears): the one persona and the
+// house facts from ha/voice, copied into app/voice at publish.
 let voicePrompt: string | null = null;
 function voiceSystem() {
   if (voicePrompt === null) {
     const read = (f: string) => { try { return readFileSync(join(process.cwd(), "voice", f), "utf-8"); } catch { return ""; } };
-    // Drop the title, the note about the tool, and the follow-up-question paragraph.
-    const house = read("house.md").replace(/\r\n/g, "\n").split("\n\n")
-      .filter((b) => !b.startsWith("#") && !b.includes("voice_prompt.py") && !b.startsWith("People almost always have a follow-up")).join("\n\n");
+    const house = read("house.md").replace(/\r\n/g, "\n").split("\n\n").filter((b) => !b.startsWith("#")).join("\n\n");
     voicePrompt = `${read("persona-teddy.md").trim()}
 
 ${house.trim()}

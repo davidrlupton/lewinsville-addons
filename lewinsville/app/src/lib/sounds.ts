@@ -12,7 +12,6 @@ import { hub } from "./ha";
 export type Sound = { id: string; name: string; who: string; created: number; seconds: number | null; file: string };
 export const SPEAKERS: Record<string, { label: string; entity: string }> = {
   living: { label: "Living room", entity: "media_player.sonos_living_room_sonos_living_room" },
-  teddy: { label: "Teddy", entity: "media_player.jarvis_media_player" },
 };
 
 const DIR = process.env.SOUNDS_DIR || "/media/lewinsville/sounds";

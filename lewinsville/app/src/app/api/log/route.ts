@@ -1,6 +1,5 @@
 // The request log, for owners: GET ?days=14 lists it; POST {id, on} flags an entry as a miss to review.
 import { recent, setFlag } from "@/lib/log";
-import { startJarvisLog } from "@/lib/jarvis_log";
 import { gate } from "@/lib/gate";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +9,6 @@ export async function GET(req: Request) {
   if (g.deny) return g.deny;
   const p = g.person;
   if (p.role !== "owner") return Response.json({ error: "owners only" }, { status: 403 });
-  startJarvisLog();
   const days = Math.min(90, Math.max(1, Number(new URL(req.url).searchParams.get("days") ?? 14)));
   return Response.json({ entries: await recent(days) });
 }

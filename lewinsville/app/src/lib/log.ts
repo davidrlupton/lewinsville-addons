@@ -1,10 +1,10 @@
-// The request log: every ask of the house, from the Talk tab, the app's buttons and Jarvis, one JSON line
+// The request log: every ask of the house, from the Talk tab, the app's buttons and Teddy's ears, one JSON line
 // each, in monthly files under /share/lewinsville on the hub (so backups and SSH can see them). Nothing
 // here is needed for the house to work; it exists so the family and Claude can review misses and improve.
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-export type Source = "app" | "button" | "jarvis" | "teddy";
+export type Source = "app" | "button" | "teddy";   // entries before 2026-11-08 may still say "jarvis"
 export type Entry = {
   id: string; at: string; source: Source; who: string;
   asked: string; reply: string; did: string[]; ms: number; ok: boolean; flagged?: boolean;
