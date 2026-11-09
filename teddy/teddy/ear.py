@@ -180,19 +180,24 @@ class Ear:
         timings = {"wake": since}
         frames: asyncio.Queue = asyncio.Queue()
         done = asyncio.Event()
-        stt = asyncio.create_task(self.transcribe(frames, timings, done))
+        stt = None   # HA's cloud STT gives up on a stream that starts with ~3 s of silence, so it is opened
+                     # only when speech begins and is handed the half second before it (2026-11-08).
         clip = list(self.preroll)
         self.vad.reset()
         silence = opt("silence_seconds", 0.7); max_s = opt("max_seconds", 12)
+        lead = int(0.5 / self.frame_s)
         speaking = False; quiet = 0.0; started = time.monotonic(); speech_start = None
         while True:
             frame = await self.mic.read()
-            clip.append(frame); await frames.put(frame)
+            clip.append(frame)
+            if speaking: await frames.put(frame)
             p = self.vad(frame)
             now = time.monotonic()
             if not speaking:
                 if p >= 0.5:
                     speaking = True; speech_start = now; timings["speech_start"] = now
+                    for f in clip[-lead:]: await frames.put(f)
+                    stt = asyncio.create_task(self.transcribe(frames, timings, done))
                     log.debug("speech started %.2fs in", now - since)
                 elif now - started > wait_s:
                     log.info("nothing said within %.0fs", wait_s); break
@@ -202,8 +207,7 @@ class Ear:
                     timings["speech_end"] = min(now - quiet, timings.get("stt_done", now))
                     log.debug("speech ended, %.2fs of speech%s", timings["speech_end"] - speech_start, " (HA finished first)" if done.is_set() and quiet < silence else ""); break
         await frames.put(None)
-        if not speaking:
-            stt.cancel()
+        if not speaking or stt is None:
             return {"timings": timings}
         res = await stt
         res["timings"] = timings
