@@ -46,11 +46,12 @@ async function tick() {
           if (e.type === "error") { ok = false; reply ||= String(d.message ?? "error"); }
         }
         if (!asked && !reply) continue; // wake word only, nothing said
+        if (!events.some((e) => e.type === "intent-start")) continue; // an STT-only run: the Teddy add-on's, logged by the portal's /api/converse instead
         const start = t["stt-end"] ?? t["run-start"]; const end = t["tts-end"] ?? t["intent-end"] ?? t["run-end"];
         await append({ id, at: r.timestamp, source: "jarvis", who: p.name, asked, reply, did, ms: start && end ? Math.max(0, end - start) : 0, ok });
       }
     }
-    await watchEar(h, pipelines);
+    if (process.env.EAR_WATCHDOG === "on") await watchEar(h, pipelines); // off since 2026-11-08: the Teddy add-on owns the Jabra, Assist Microphone is stopped
   } catch (e) { console.error("jarvis log:", (e as Error)?.message ?? JSON.stringify(e)); }
 }
 
