@@ -36,7 +36,10 @@ class Voice:
         """A WAV of `text` in Teddy's voice, or None."""
         payload = {"engine_id": self.opt("tts_engine", "tts.home_assistant_cloud"), "message": text,
                    "language": self.opt("tts_language", "en-GB"),
-                   "options": {"voice": self.opt("tts_voice", "RyanNeural"), "audio_output": "wav"}}
+                   # HA ignores the engine's own audio_output here and serves MP3; its preferred_* options make it
+                   # transcode to what aplay can take. Without them aplay played MP3 bytes as raw PCM: white noise (2026-11-08).
+                   "options": {"voice": self.opt("tts_voice", "RyanNeural"), "preferred_format": "wav",
+                               "preferred_sample_rate": 16000, "preferred_sample_channels": 1, "preferred_sample_bytes": 2}}
         st, body = await self.ha("POST", "/api/tts_get_url", payload)
         if st >= 300:
             log.warning("tts_get_url -> %s %s", st, body[:200]); return None
@@ -44,6 +47,8 @@ class Voice:
         st, audio = await self.ha("GET", path)
         if st >= 300 or len(audio) < 64:
             log.warning("tts fetch -> %s (%d bytes)", st, len(audio)); return None
+        if audio[:4] != b"RIFF":
+            log.error("tts returned %r, not WAV; refusing to play it", audio[:4]); return None
         return audio
 
     # ---- Sonos ------------------------------------------------------------------------------------

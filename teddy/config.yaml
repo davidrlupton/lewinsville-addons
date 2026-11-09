@@ -1,5 +1,5 @@
 name: Teddy
-version: "0.2.3"
+version: "0.2.4"
 slug: teddy
 description: Teddy on the Lenovo. Listens on the Jabra for "Hey Teddy", understands through the portal's Claude brain, answers in Ryan's voice through the Sonos, keeps listening for follow-ups. PLAN.md Phase 5.
 url: https://github.com/davidrlupton/Lewinsville
