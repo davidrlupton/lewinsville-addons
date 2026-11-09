@@ -4,7 +4,7 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-export type Source = "app" | "button" | "jarvis";
+export type Source = "app" | "button" | "jarvis" | "teddy";
 export type Entry = {
   id: string; at: string; source: Source; who: string;
   asked: string; reply: string; did: string[]; ms: number; ok: boolean; flagged?: boolean;

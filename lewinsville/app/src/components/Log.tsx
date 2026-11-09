@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { Entry } from "@/lib/log";
 import { Segmented } from "./Segmented";
 
-const BADGE: Record<Entry["source"], [string, string]> = { jarvis: ["♪", "Teddy"], app: ["✦", "Talk"], button: ["⌂", "Button"] };
+const BADGE: Record<Entry["source"], [string, string]> = { jarvis: ["♪", "Teddy"], teddy: ["♪", "Teddy"], app: ["✦", "Talk"], button: ["⌂", "Button"] };
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
@@ -23,7 +23,7 @@ export function Log() {
   return (
     <div className="space-y-3">
       <div className="card flex items-center justify-between p-3 text-sm">
-        <div><span className="font-extrabold">{entries.length}</span> asks · <span className="font-extrabold">{entries.filter((e) => e.source === "jarvis").length}</span> by voice · typical reply <span className="font-extrabold">{(med / 1000).toFixed(1)}s</span>{flagged ? <> · <span className="font-extrabold text-saffron">{flagged} flagged</span></> : null}</div>
+        <div><span className="font-extrabold">{entries.length}</span> asks · <span className="font-extrabold">{entries.filter((e) => e.source === "jarvis" || e.source === "teddy").length}</span> by voice · typical reply <span className="font-extrabold">{(med / 1000).toFixed(1)}s</span>{flagged ? <> · <span className="font-extrabold text-saffron">{flagged} flagged</span></> : null}</div>
         <Segmented value={String(days)} options={[["7", "7d"], ["14", "14d"], ["30", "30d"]] as const} onChange={(v) => setDays(Number(v))} label="Window" />
       </div>
       {entries.length === 0 && <div className="card p-4 text-sm opacity-70">Nothing yet. Ask Teddy something.</div>}

@@ -1,6 +1,8 @@
 // The house agent: Claude with tools that act through Home Assistant. Used by /api/chat (text or
 // transcribed voice). Every action goes through the same allowlist as the buttons in the app.
 import Anthropic from "@anthropic-ai/sdk";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { hub } from "./ha";
@@ -10,6 +12,28 @@ import { getEnergy, describeEnergy } from "./energy";
 import { note } from "./log";
 
 export const MODEL = process.env.CLAUDE_MODEL ?? "claude-opus-5-5";
+export const VOICE_MODEL = process.env.CLAUDE_VOICE_MODEL ?? "claude-sonnet-5-5";
+
+// The spoken Teddy (the /api/converse route, called by the Teddy ear add-on): the one persona and the house
+// facts from ha/voice, copied into app/voice at publish. The "end with a question" paragraph was a workaround
+// for Home Assistant's pipeline, which closed the mic otherwise; our own ear keeps listening, so it is dropped.
+let voicePrompt: string | null = null;
+function voiceSystem() {
+  if (voicePrompt === null) {
+    const read = (f: string) => { try { return readFileSync(join(process.cwd(), "voice", f), "utf-8"); } catch { return ""; } };
+    // Drop the title, the note about the tool, and the follow-up-question paragraph.
+    const house = read("house.md").replace(/\r\n/g, "\n").split("\n\n")
+      .filter((b) => !b.startsWith("#") && !b.includes("voice_prompt.py") && !b.startsWith("People almost always have a follow-up")).join("\n\n");
+    voicePrompt = `${read("persona-teddy.md").trim()}
+
+${house.trim()}
+
+You are heard through a speaker and the ear keeps listening for a few seconds after you finish, so there is no
+need to end with a question; answer, then stop. You cannot see who is speaking: treat them as a member of the
+household, often a child. Never read out entity ids, URLs or code. Numbers in words where natural.`;
+  }
+  return voicePrompt;
+}
 
 function client() {
   const key = process.env.ANTHROPIC_API_KEY;
@@ -152,18 +176,20 @@ export type ChatMessage = Anthropic.Beta.BetaMessageParam;
 // frozen per person and the live context rides along as a mid-conversation system message that the client
 // keeps in its history. `drop_block` is the safety net for transcripts recorded before this change.
 /** Stream a reply. Yields text deltas; resolves with the final assistant content for the client to keep. */
-export async function* chat(person: Person, history: ChatMessage[]) {
+export async function* chat(person: Person, history: ChatMessage[], mode: { voice?: boolean } = {}) {
   const house = await getHouse();
-  const system = [
-    { type: "text" as const, text: SYSTEM_BASE, cache_control: { type: "ephemeral" as const } },
-    { type: "text" as const, text: `You are talking to ${person.name} (${person.role}).` },
-  ];
+  const system = mode.voice
+    ? [{ type: "text" as const, text: voiceSystem(), cache_control: { type: "ephemeral" as const } }]
+    : [
+      { type: "text" as const, text: SYSTEM_BASE, cache_control: { type: "ephemeral" as const } },
+      { type: "text" as const, text: `You are talking to ${person.name} (${person.role}).` },
+    ];
   const context = { role: "system", content: `Local time ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })}.
 
 House right now:
 ${describeHouse(house)}` } as ChatMessage;
   const runner = client().beta.messages.toolRunner({
-    model: MODEL,
+    model: mode.voice ? VOICE_MODEL : MODEL,
     max_tokens: 4000,
     system,
     tools: tools(person),

@@ -3,6 +3,8 @@
 OPTS=/data/options.json
 export ANTHROPIC_API_KEY="$(jq -r '.anthropic_api_key // empty' $OPTS)"
 export CLAUDE_MODEL="$(jq -r '.claude_model // "claude-opus-5-5"' $OPTS)"
+export CLAUDE_VOICE_MODEL="$(jq -r '.claude_voice_model // "claude-sonnet-5-5"' $OPTS)"
+export TEDDY_TOKEN="$(jq -r '.teddy_token // empty' $OPTS)"
 export LOG_DIR=/share/lewinsville
 export DEV_USER_EMAIL="$(jq -r '.dev_user_email // empty' $OPTS)"
 export ENERGY_RATE_CENTS="$(jq -r '.energy_rate_cents // 0' $OPTS)"
