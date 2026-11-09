@@ -34,6 +34,18 @@ TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
 log = logging.getLogger("teddy")
 logging.basicConfig(level=logging.DEBUG if opt("debug", True) else logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
+logging.getLogger("websockets").setLevel(logging.INFO)
+
+
+def set_house_time():
+    """The container runs in UTC; the quiet-hours schedule and the log need house time, so take HA's zone."""
+    try:
+        import urllib.request
+        req = urllib.request.Request("http://supervisor/core/api/config", headers={"Authorization": f"Bearer {TOKEN}"})
+        with urllib.request.urlopen(req, timeout=10) as r: tz = json.load(r).get("time_zone")
+        if tz: os.environ["TZ"] = tz; time.tzset(); log.info("house time zone %s", tz)
+    except Exception as e:
+        log.warning("time zone: %s", e)
 
 
 class Mic:
@@ -225,6 +237,8 @@ class Ear:
         except OSError as e: log.warning("log write: %s", e)
 
     async def run(self):
+        if not TOKEN: log.error("SUPERVISOR_TOKEN is empty: speech-to-text and speaking cannot work")
+        set_house_time()
         await self.mic.start()
         log.info("listening for %r via %s; STT from pipeline %r; speak=%s", opt("wake_word", "hey_teddy"), opt("wake_uri", ""), opt("pipeline", ""), opt("speak", False))
         ms = lambda a, b: int((b - a) * 1000)
