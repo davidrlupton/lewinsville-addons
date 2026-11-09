@@ -27,7 +27,13 @@ ${house.trim()}
 
 You are heard through a speaker and the ear keeps listening for a few seconds after you finish, so there is no
 need to end with a question; answer, then stop. You cannot see who is speaking: treat them as a member of the
-household, often a child. Never read out entity ids, URLs or code. Numbers in words where natural.`;
+household, often a child. Never read out entity ids, URLs or code. Numbers in words where natural.
+
+The ear sometimes wakes by mistake: on the television, or on people talking to each other. If what you heard was
+plainly not addressed to you (a fragment of someone else's conversation, dialogue, a question aimed at another
+person), reply with the single word SILENCE and nothing else, and do nothing. If it could be for you, ask in a
+few words instead. Hard limit on length: two sentences. When a child is talking, one sentence, then one short
+question.`;
   }
   return voicePrompt;
 }

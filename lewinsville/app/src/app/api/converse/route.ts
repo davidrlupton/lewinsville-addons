@@ -61,14 +61,16 @@ export async function POST(req: Request) {
 
   const enc = new TextEncoder();
   const run = async (emit: (o: object) => void) => {
-    const t0 = Date.now(); let reply = ""; let buf = ""; let ok = true; let error: string | undefined;
+    const t0 = Date.now(); let reply = ""; let buf = ""; let ok = true; let error: string | undefined; let silent = false;
+    // "SILENCE" is the brain's way of saying the ear woke on something not meant for Teddy: nothing is spoken.
+    const say = (s: string) => { if (/^silence[.!]?$/i.test(s.trim())) { silent = true; return; } emit({ sentence: s }); };
     const did = await withNotes(async (did) => {
       try {
         for await (const ev of chat(VOICE, [...thread.history, user], { voice: true })) {
           if ("text" in ev && ev.text) {
             buf += ev.text;
             const [sentences, rest] = takeSentences(buf); buf = rest;
-            for (const s of sentences) emit({ sentence: s });
+            for (const s of sentences) say(s);
           }
           if ("done" in ev) {
             reply = textOf(ev.content) || reply;
@@ -77,11 +79,12 @@ export async function POST(req: Request) {
             thread.last = Date.now();
           }
         }
-        if (buf.trim()) emit({ sentence: buf.trim() });
+        if (buf.trim()) say(buf.trim());
+        if (silent) reply = "";
       } catch (e) { ok = false; error = (e as Error).message; }
       return did;
     });
-    void append({ source: "teddy", who: (who || "Teddy").slice(0, 40), asked: text.slice(0, 300), reply: (reply || error || "").slice(0, 500), did, ms: Date.now() - t0, ok });
+    void append({ source: "teddy", who: (who || "Teddy").slice(0, 40), asked: text.slice(0, 300), reply: (silent ? "(silence: not meant for Teddy)" : reply || error || "").slice(0, 500), did, ms: Date.now() - t0, ok });
     return { ok, error, reply, did };
   };
 
