@@ -1,12 +1,13 @@
 """Teddy's mouth and brain connections: Home Assistant Cloud TTS (Ryan, en-GB) fetched through the Supervisor
 proxy as 16 kHz mono WAV, the Sonos snapshot/volume/restore around each reply, and the call to the portal's
 /api/converse (the one brain), streamed sentence by sentence so speaking starts before the reply is finished."""
-import asyncio, json, logging, os, struct, threading, time, urllib.request, urllib.error
+import asyncio, json, logging, os, struct, threading, urllib.request, urllib.error
 from datetime import datetime
 
 log = logging.getLogger("teddy.voice")
 TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
 CORE = os.environ.get("HA_CORE_URL", "http://supervisor/core")
+PORTAL = "http://90b47cbd-lewinsville:3000"   # the portal add-on on the Supervisor network
 
 
 def _http(method: str, url: str, body: dict | None = None, headers: dict | None = None, timeout: float = 30) -> tuple[int, bytes]:
@@ -52,8 +53,7 @@ class Voice:
         """A WAV of `text` in Teddy's voice, or None. HA ignores the engine's own audio_output here and serves
         MP3; its preferred_* options make it transcode. Without them aplay played MP3 bytes as raw PCM: white
         noise (2026-11-08)."""
-        payload = {"engine_id": self.opt("tts_engine", "tts.home_assistant_cloud"), "message": text,
-                   "language": self.opt("tts_language", "en-GB"),
+        payload = {"engine_id": "tts.home_assistant_cloud", "message": text, "language": "en-GB",
                    "options": {"voice": self.opt("tts_voice", "RyanNeural"), "preferred_format": "wav",
                                "preferred_sample_rate": 16000, "preferred_sample_channels": 1, "preferred_sample_bytes": 2}}
         st, body = await self.ha("POST", "/api/tts_get_url", payload)
@@ -88,12 +88,12 @@ class Voice:
     # ---- the brain --------------------------------------------------------------------------------
     async def converse_stream(self, text: str, conversation: str | None):
         """Yield the portal's NDJSON objects: {"sentence": ...} as they come, then {"done": true, ...}."""
-        url = self.opt("portal_url", "http://90b47cbd-lewinsville:3000").rstrip("/") + "/api/converse?stream=1"
+        url = PORTAL + "/api/converse?stream=1"
         headers = {"Content-Type": "application/json", "x-teddy-token": self.opt("teddy_token", "")}
         q: asyncio.Queue = asyncio.Queue(); loop = asyncio.get_running_loop()
         def worker():
             try:
-                req = urllib.request.Request(url, data=json.dumps({"text": text, "conversation": conversation}).encode(), method="POST", headers=headers)
+                req = urllib.request.Request(url, data=json.dumps({"text": text, "conversation": conversation, "who": "Living Room Ear"}).encode(), method="POST", headers=headers)
                 with urllib.request.urlopen(req, timeout=50) as r:
                     for line in r:
                         if line.strip(): loop.call_soon_threadsafe(q.put_nowait, json.loads(line))

@@ -27,6 +27,9 @@ OPT = json.load(open("/data/options.json")) if os.path.exists("/data/options.jso
 def opt(k, d): return OPT.get(k, d)
 
 RATE, WIDTH, CH = 16000, 2, 1
+WAKE_HOST, WAKE_PORT, WAKE_WORD = "core-openwakeword", 10400, "hey_teddy"   # the openWakeWord add-on with our model
+PIPELINE = "Lewinsville"          # whose STT engine we borrow
+LISTEN_TIMEOUT, MAX_SECONDS = 6.0, 12.0
 LOG_DIR = "/share/lewinsville"
 CLIP_DIR = f"{LOG_DIR}/teddy-clips"
 HA_WS = os.environ.get("HA_WS_URL", "ws://supervisor/core/websocket")
@@ -76,14 +79,11 @@ class Ear:
 
     # ---- wake -------------------------------------------------------------------------------------
     async def wait_for_wake(self) -> float:
-        uri = opt("wake_uri", "tcp://core-openwakeword:10400")
-        host, port = uri.replace("tcp://", "").split(":")
-        name = opt("wake_word", "hey_teddy")
         while True:
             try:
-                client = AsyncTcpClient(host, int(port))
+                client = AsyncTcpClient(WAKE_HOST, WAKE_PORT)
                 await client.connect()
-                await client.write_event(Detect(names=[name]).event())
+                await client.write_event(Detect(names=[WAKE_WORD]).event())
                 await client.write_event(AudioStart(rate=RATE, width=WIDTH, channels=CH, timestamp=0).event())
                 detected = asyncio.Event()
                 async def reader():
@@ -125,9 +125,8 @@ class Ear:
     async def pipeline(self, ws) -> str | None:
         if self.pipeline_id is None:
             r = await self.call(ws, {"type": "assist_pipeline/pipeline/list"})
-            want = opt("pipeline", "Lewinsville")
-            self.pipeline_id = next((p["id"] for p in r["pipelines"] if p["name"] == want), "")
-            if not self.pipeline_id: log.warning("pipeline %r not found, using the preferred one", want)
+            self.pipeline_id = next((p["id"] for p in r["pipelines"] if p["name"] == PIPELINE), "")
+            if not self.pipeline_id: log.warning("pipeline %r not found, using the preferred one", PIPELINE)
         return self.pipeline_id or None
 
     async def transcribe(self, frames: "asyncio.Queue[bytes | None]", timings: dict, done: asyncio.Event) -> dict:
@@ -187,7 +186,7 @@ class Ear:
                      # only when speech begins and is handed the half second before it (2026-11-08).
         clip = list(self.preroll)
         self.vad.reset()
-        silence = opt("silence_seconds", 0.7); max_s = opt("max_seconds", 12)
+        silence = opt("silence_seconds", 0.55); max_s = MAX_SECONDS
         lead = int(0.5 / self.frame_s)
         speaking = False; quiet = 0.0; started = time.monotonic(); speech_start = None
         while True:
@@ -298,14 +297,14 @@ class Ear:
         if not TOKEN: log.error("SUPERVISOR_TOKEN is empty: speech-to-text and speaking cannot work")
         set_house_time()
         await self.mic.start()
-        log.info("listening for %r via %s; STT from pipeline %r; speak=%s", opt("wake_word", "hey_teddy"), opt("wake_uri", ""), opt("pipeline", ""), opt("speak", False))
+        log.info("listening for %r via %s:%s; STT from pipeline %r; speak=%s", WAKE_WORD, WAKE_HOST, WAKE_PORT, PIPELINE, opt("speak", False))
         ms = lambda a, b: int((b - a) * 1000)
         asyncio.create_task(self.serve())
         while True:
             since = await self.wait_for_wake()
             if since is None:
                 await self.say_pending(); continue
-            conversation = None; wait_s = opt("listen_timeout", 6); followup = False
+            conversation = None; wait_s = LISTEN_TIMEOUT; followup = False
             while True:
                 res = await self.listen_and_transcribe(since, wait_s)
                 t = res["timings"]

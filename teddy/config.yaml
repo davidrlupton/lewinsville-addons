@@ -1,5 +1,5 @@
 name: Teddy
-version: "0.2.5"
+version: "0.2.6"
 slug: teddy
 description: Teddy on the Lenovo. Listens on the Jabra for "Hey Teddy", understands through the portal's Claude brain, answers in Ryan's voice through the Sonos, keeps listening for follow-ups. PLAN.md Phase 5.
 url: https://github.com/davidrlupton/Lewinsville
@@ -15,44 +15,28 @@ audio: true
 map:
   - share:rw   # /share/lewinsville: the turn log (teddy-ear.jsonl) and, while save_clips is on, the clips
 options:
-  wake_uri: tcp://core-openwakeword:10400   # the openWakeWord add-on, which already has our hey_teddy model
-  wake_word: hey_teddy
-  pipeline: Lewinsville                     # whose speech-to-text to use (the pipeline's STT engine only)
-  listen_timeout: 6                         # seconds to wait for speech after the wake word
-  silence_seconds: 0.55                     # silence that ends an utterance
-  max_seconds: 12                           # hard stop for one utterance
-  save_clips: true                          # keep each utterance as a WAV under /share/lewinsville/teddy-clips
-  debug: true
-  speak: false                              # false = step 1 (hear, transcribe, log only); true = think and answer
-  portal_url: http://90b47cbd-lewinsville:3000
+  speak: true                               # false = hear, transcribe and log only
   teddy_token: ""                           # must equal the portal add-on's teddy_token (tools/teddy_token.py sets both)
-  tts_engine: tts.home_assistant_cloud
-  tts_language: en-GB
-  tts_voice: RyanNeural
+  tts_voice: RyanNeural                     # a Home Assistant Cloud en-GB voice
+  silence_seconds: 0.55                     # silence that ends an utterance
   followup_seconds: 8                       # the mic stays open this long after each reply, no wake word needed
   sonos_entity: media_player.sonos_living_room_sonos_living_room
-  volume_day: 0.45                          # Sonos volume while Teddy speaks, restored afterwards
-  volume_quiet: 0.25
+  volume_day: 0.5                           # Sonos volume while Teddy speaks, restored afterwards
+  volume_quiet: 0.36
   quiet_from: "21:00"
   quiet_until: "08:00"
+  save_clips: true                          # keep each utterance as a WAV under /share/lewinsville/teddy-clips
+  debug: true
 schema:
-  wake_uri: str
-  wake_word: str
-  pipeline: str
-  listen_timeout: float
-  silence_seconds: float
-  max_seconds: float
-  save_clips: bool
-  debug: bool
   speak: bool
-  portal_url: str
   teddy_token: password?
-  tts_engine: str
-  tts_language: str
   tts_voice: str
+  silence_seconds: float
   followup_seconds: float
   sonos_entity: str?
   volume_day: float
   volume_quiet: float
   quiet_from: str
   quiet_until: str
+  save_clips: bool
+  debug: bool
