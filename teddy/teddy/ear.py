@@ -11,6 +11,7 @@
 With speak=false it is step 1 of the plan: hear, transcribe, log, nothing more.
 """
 import asyncio, json, logging, os, sys, time, wave
+from array import array
 from collections import deque
 from datetime import datetime
 
@@ -216,6 +217,7 @@ class Ear:
             return {"timings": timings}
         res = await stt
         res["timings"] = timings
+        res["peak"] = max(map(abs, array("h", b"".join(clip))), default=0)   # loudest sample, wake word included
         if opt("save_clips", True):
             name = datetime.now().strftime("%Y%m%d-%H%M%S") + ".wav"
             with wave.open(f"{CLIP_DIR}/{name}", "wb") as w:
@@ -315,7 +317,11 @@ class Ear:
                        "speech_start_ms": ms(t["wake"], t["speech_start"]) if "speech_start" in t else None,
                        "speech_ms": ms(t["speech_start"], t["speech_end"]) if "speech_end" in t else None,
                        "stt_ms": ms(t["speech_end"], t["stt_done"]) if "stt_done" in t and "speech_end" in t else None}
-                text = res.get("text")
+                text = res.get("text"); rec["peak"] = res.get("peak")
+                # Someone talking to Teddy at the Jabra peaks at 10,000 to 32,000; the false wakes of 9-10 Nov
+                # (far-off talk, the TV at low volume) peaked under 4,600 and none of them was a real request.
+                if text and not followup and res.get("peak", 32768) < opt("min_peak", 5000):
+                    rec["ignored"] = "too quiet to be meant for Teddy"; log.info("ignored: peak %s", res.get("peak")); self.record(rec); break
                 if not text or not opt("speak", False):
                     self.record(rec); break
                 outcome = {}

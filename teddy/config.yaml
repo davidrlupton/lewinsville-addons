@@ -1,5 +1,5 @@
 name: Teddy
-version: "0.2.8"
+version: "0.2.9"
 slug: teddy
 description: Teddy on the Lenovo. Listens on the Jabra for "Hey Teddy", understands through the portal's Claude brain, answers in Ryan's voice through the Sonos, keeps listening for follow-ups. PLAN.md Phase 5.
 url: https://github.com/davidrlupton/Lewinsville
@@ -19,6 +19,7 @@ options:
   teddy_token: ""                           # must equal the portal add-on's teddy_token (tools/teddy_token.py sets both)
   tts_voice: RyanNeural                     # a Home Assistant Cloud en-GB voice
   silence_seconds: 0.55                     # silence that ends an utterance
+  min_peak: 5000                            # a wake quieter than this (16-bit peak, 0-32768) is ignored; 0 = off
   followup_seconds: 8                       # the mic stays open this long after each reply, no wake word needed
   sonos_entity: media_player.sonos_living_room_sonos_living_room
   volume_day: 0.5                           # Sonos volume while Teddy speaks, restored afterwards
@@ -32,6 +33,7 @@ schema:
   teddy_token: password?
   tts_voice: str
   silence_seconds: float
+  min_peak: int
   followup_seconds: float
   sonos_entity: str?
   volume_day: float
