@@ -91,6 +91,11 @@ class Hub {
   onChange(l: (e: HassEntities) => void) { this.listeners.add(l); return () => { this.listeners.delete(l); }; }
 }
 
+/** Home Assistant's REST API (path after /api/), with the same credentials as the websocket. */
+export function haFetch(path: string) {
+  return fetch(`${SUP ? "http://supervisor/core" : BASE}/api/${path}`, { headers: { Authorization: `Bearer ${TOKEN}` }, cache: "no-store" });
+}
+
 type G = typeof globalThis & { __lhhHub?: Hub };
 export function hub(): Hub {
   const g = globalThis as G;

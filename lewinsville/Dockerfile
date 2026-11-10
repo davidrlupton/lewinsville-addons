@@ -14,6 +14,7 @@ COPY --from=build /src/.next/standalone ./
 COPY --from=build /src/.next/static ./.next/static
 COPY --from=build /src/public ./public
 COPY --from=build /src/voice ./voice
+COPY --from=build /src/watch ./watch
 COPY run.sh /run.sh
 RUN chmod +x /run.sh
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1

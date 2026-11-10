@@ -9,6 +9,7 @@ import { Entertain } from "@/components/Entertain";
 import { Energy } from "@/components/Energy";
 import { Sounds } from "@/components/Sounds";
 import { Log } from "@/components/Log";
+import { Watch } from "@/components/Watch";
 import { People } from "@/components/People";
 
 const TABS: readonly (readonly [string, string, IconName])[] = [["home", "Home", "home"], ["rooms", "Rooms", "rooms"], ["energy", "Energy", "energy"], ["climate", "Climate", "climate"], ["talk", "Talk", "talk"]];
@@ -150,6 +151,7 @@ export default function Page() {
           </section>
           {media.length > 0 && <section><h2 className="mb-2 text-lg font-extrabold">Playing</h2><div className="space-y-2">{media.map((d) => <MediaCard key={d.id} d={d} call={call} />)}</div></section>}
           <Sounds me={me} />
+          {me?.role === "owner" && <Watch />}
           {me?.role === "owner" && <People />}
         </div>
       )}

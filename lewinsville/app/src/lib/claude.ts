@@ -38,7 +38,7 @@ question.`;
   return voicePrompt;
 }
 
-function client() {
+export function client() {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("no_api_key");
   return new Anthropic({ apiKey: key });

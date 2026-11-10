@@ -1,0 +1,64 @@
+{
+  "_note": "Who and what the camera judge treats as known. Plates are the true plates; the judge matches loosely (the driveway camera misreads one or two characters often: UXF5480 has been read as LXF5480, UXF5490, 1LF54S0). Edited by hand or from the Watch card. David, 2026-11-09.",
+  "protected_hours": {
+    "from": "22:00",
+    "until": "06:00"
+  },
+  "alert": [
+    "David",
+    "Pratima"
+  ],
+  "cameras": {
+    "front_door": "the doorbell at the front door",
+    "porch": "the back porch",
+    "driveway": "the driveway, where the family and guests park",
+    "front_wall": "the front of the house and the approach from the street",
+    "back_yard": "the back yard",
+    "workshop": "the workshop door at the basement level"
+  },
+  "vehicles": [
+    {
+      "plate": "UXF5480",
+      "who": "Pratima",
+      "what": "blue Honda Pilot",
+      "kind": "family"
+    },
+    {
+      "plate": "7DL2787",
+      "who": "David",
+      "what": "silver Tesla Model S",
+      "kind": "family"
+    },
+    {
+      "plate": "5FG5889",
+      "who": "David",
+      "what": "white Toyota Tundra pickup with work logos",
+      "kind": "family"
+    },
+    {
+      "plate": "TFW5589",
+      "who": "Chantal",
+      "what": "grey SUV",
+      "kind": "regular"
+    },
+    {
+      "plate": "VKR6291",
+      "who": "Tanu (Pratima's sister)",
+      "what": "white Toyota Corolla",
+      "kind": "regular"
+    },
+    {
+      "plate": "TFX8071",
+      "who": "Priya and Steve",
+      "what": "Tesla Model Y",
+      "kind": "regular"
+    },
+    {
+      "plate": "AW0NG",
+      "who": "Aldo Wong, electrician",
+      "what": "grey Toyota Tundra",
+      "kind": "trade"
+    }
+  ],
+  "people": []
+}
