@@ -64,7 +64,7 @@ function context(camera: string, kind: string, ents: HassEntities, k: Known) {
 
 const SYSTEM = `You review one camera detection at a family home (two adults, two young children) and decide whether it
 is worth anyone's attention. You get a close crop of what the camera detected, a wider frame of the scene taken a
-moment later, and what the house knows. Answer with the verdict tool, once.
+moment later, and what the house knows. Always answer by calling the verdict tool, once, and write nothing else.
 
 family: a member of the household or a family vehicle. expected: a known regular, a delivery, the mail, a trade
 working in daylight, a guest when guests are expected, someone passing on the street or pavement. unexpected: a
@@ -120,7 +120,7 @@ async function review(camera: string, kind: string, eventId: string | undefined,
     if (scene) await writeFile(imageFile(id, true), scene);
     const image = (b: Buffer) => ({ type: "image" as const, source: { type: "base64" as const, media_type: "image/jpeg" as const, data: b.toString("base64") } });
     const msg = await client().messages.create({
-      model: VOICE_MODEL, max_tokens: 400, system: SYSTEM, tools: [TOOL], tool_choice: { type: "tool", name: "verdict" },
+      model: VOICE_MODEL, max_tokens: 400, system: SYSTEM, tools: [TOOL],   // forcing the tool (tool_choice) is refused by this model; the system prompt asks for it
       messages: [{ role: "user", content: [
         ...(crop ? [{ type: "text" as const, text: "Close crop of the detection:" }, image(crop)] : []),
         ...(scene ? [{ type: "text" as const, text: "The scene a few seconds later:" }, image(scene)] : []),
