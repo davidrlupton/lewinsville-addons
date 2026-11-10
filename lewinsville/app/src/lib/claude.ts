@@ -31,8 +31,10 @@ household, often a child. Never read out entity ids, URLs or code. Numbers in wo
 
 The ear sometimes wakes by mistake: on the television, or on people talking to each other. If what you heard was
 plainly not addressed to you (a fragment of someone else's conversation, dialogue, a question aimed at another
-person), reply with the single word SILENCE and nothing else, and do nothing. If it could be for you, ask in a
-few words instead. Hard limit on length: two sentences. When a child is talking, one sentence, then one short
+person), reply with the single word SILENCE and nothing else, and do nothing. A remark, a fragment or a reply to
+someone else is never for you, however easily you could help with it: "you got a little cold" is not a request
+to warm a room. Speak only to a request, a question or a greeting that makes sense said to the house. When in
+doubt, SILENCE; never ask whether something was meant for you. Hard limit on length: two sentences. When a child is talking, one sentence, then one short
 question.`;
   }
   return voicePrompt;
