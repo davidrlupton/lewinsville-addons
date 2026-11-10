@@ -14,6 +14,7 @@ export type Verdict = "family" | "expected" | "unexpected" | "unsure" | "error";
 export type Review = {
   id: string; at: string; camera: string; kind: string; verdict: Verdict; who: string; why: string;
   confidence: number; protectedHours: boolean; guests: boolean; ms: number; grade?: "fine" | "not_fine";
+  faces?: string[];   // names Protect matched to faces in this detection ("" = a face it has no name for)
 };
 type Line = Review | { grade: string; value: "fine" | "not_fine"; by: string; at: string };
 
@@ -72,11 +73,16 @@ person or vehicle that does not fit the time and place, such as someone unknown 
 the back yard or by the workshop, trying a door or a car, or looking in. unsure: you cannot tell; say what is
 missing.
 
-You cannot recognise anyone by their face and must not try. Go by what the house tells you (plates, phones that
+You cannot recognise anyone by their face and must not try. The camera system can: when it matched a face to a
+person the owners named, the house tells you the name and how clear the face was. Treat a match as strong evidence,
+not proof (a small or blurred face can be matched wrongly), check it against everything else, and look the name up
+in the known people to see whether they are family or a regular. A face with no name only means the owners have not
+named that person yet. Otherwise go by what the house tells you (plates, phones that
 are home, the doorbell, guests expected), by vehicles, by what the person is doing and carrying, and by the time.
 Someone walking in from a known car with shopping while the family's phones are home is family or expected.
 During protected hours be stricter: an adult you cannot place near the house is unexpected. "who" is a short
-description, never a guess at a stranger's identity. "why" is one plain sentence a child could hear.`;
+description; use a name only when the house gave you one ("likely David, carrying a car seat"), never a guess at
+a stranger's identity. "why" is one plain sentence a child could hear.`;
 
 const TOOL = {
   name: "verdict", description: "Record the verdict for this detection.",
@@ -108,6 +114,14 @@ async function thumbnail(eventId: string) {
   return null;
 }
 
+/** Faces Protect found in this event, through ha/custom_components/teddy_brain/protect.py. Empty on any failure. */
+async function faces(eventId: string): Promise<{ name: string; quality: number }[]> {
+  try {
+    const r = await hub().send<{ thumbnails: { type: string; attributes?: { matchedName?: string; qualityScore?: number } }[] }>({ type: "teddy_brain/protect_event", event_id: eventId });
+    return r.thumbnails.filter((t) => t.type === "face").map((t) => ({ name: String(t.attributes?.matchedName ?? "").trim(), quality: Number(t.attributes?.qualityScore) || 0 }));
+  } catch { return []; }
+}
+
 async function review(camera: string, kind: string, eventId: string | undefined, ents: HassEntities) {
   const t0 = Date.now(); const id = `${t0.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const k = known(); const ctx = context(camera, kind, ents, k);
@@ -115,6 +129,12 @@ async function review(camera: string, kind: string, eventId: string | undefined,
   try {
     const [scene, crop] = await Promise.all([jpeg(`camera_proxy/camera.${camera}_high_resolution_channel?width=1280&height=720`), eventId ? thumbnail(eventId) : null]);
     if (!scene && !crop) throw new Error("no picture");
+    const seen = eventId ? await faces(eventId) : [];   // after the thumbnail wait, so Protect has had time to match
+    if (seen.length) {
+      out.faces = seen.map((f) => f.name);
+      ctx.text += `
+Faces the camera system found in this detection: ${seen.map((f) => `${f.name ? `matched to ${f.name}` : "a face with no name"} (clarity ${f.quality} of 100)`).join("; ")}.`;
+    }
     await mkdir(`${DIR}/img`, { recursive: true });
     if (crop) await writeFile(imageFile(id), crop);
     if (scene) await writeFile(imageFile(id, true), scene);

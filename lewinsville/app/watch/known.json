@@ -60,5 +60,15 @@
       "kind": "trade"
     }
   ],
-  "people": []
+  "people": [
+    {
+      "name": "David",
+      "kind": "family"
+    },
+    {
+      "name": "Ben",
+      "kind": "regular",
+      "note": "David's friend"
+    }
+  ]
 }
