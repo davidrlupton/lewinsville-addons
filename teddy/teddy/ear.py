@@ -60,13 +60,18 @@ class Mic:
     """arecord through the hub's PulseAudio, handed out in VAD-sized frames (512 samples, 32 ms)."""
     def __init__(self, frame_bytes: int):
         self.frame = frame_bytes; self.proc = None
+        self.tape = None; self.tape_until = 0.0   # a test recording asked for through POST /record
     async def start(self):
         self.proc = await asyncio.create_subprocess_exec(
             "arecord", "-q", "-r", str(RATE), "-c", str(CH), "-f", "S16_LE", "-t", "raw",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
         log.info("microphone open (arecord pid %s)", self.proc.pid)
     async def read(self) -> bytes:
-        return await self.proc.stdout.readexactly(self.frame)
+        f = await self.proc.stdout.readexactly(self.frame)
+        if self.tape:
+            self.tape.writeframes(f)
+            if time.monotonic() > self.tape_until: self.tape.close(); self.tape = None; log.info("test recording done")
+        return f
 
 
 class Ear:
@@ -289,7 +294,17 @@ class Ear:
             try: await asyncio.wait_for(fut, 60)
             except Exception as e: return web.json_response({"error": str(e)}, status=502)
             return web.json_response({"ok": True})
-        app = web.Application(); app.add_routes([web.post("/say", say), web.get("/health", lambda r: web.json_response({"ok": True}))])
+        async def record(req: web.Request):
+            """Save everything the microphone hears for a short while, to score the wake word against real attempts
+            (POST /record {"seconds": 120}). The loop runs as usual meanwhile. One file, /share/lewinsville/teddy-test-*.wav."""
+            if req.headers.get("x-teddy-token", "") != opt("teddy_token", ""): return web.json_response({"error": "forbidden"}, status=403)
+            secs = min(300, max(5, float((await req.json()).get("seconds", 120))))
+            name = f"{LOG_DIR}/teddy-test-{datetime.now().strftime('%Y%m%d-%H%M%S')}.wav"
+            w = wave.open(name, "wb"); w.setnchannels(CH); w.setsampwidth(WIDTH); w.setframerate(RATE)
+            self.mic.tape_until = time.monotonic() + secs; self.mic.tape = w
+            log.info("test recording for %.0fs to %s", secs, name)
+            return web.json_response({"ok": True, "file": name, "seconds": secs})
+        app = web.Application(); app.add_routes([web.post("/say", say), web.post("/record", record), web.get("/health", lambda r: web.json_response({"ok": True}))])
         runner = web.AppRunner(app); await runner.setup()
         await web.TCPSite(runner, "0.0.0.0", 8099).start()
         log.info("say endpoint on :8099")
