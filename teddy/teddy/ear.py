@@ -193,6 +193,7 @@ class Ear:
         silence = opt("silence_seconds", 0.55); max_s = MAX_SECONDS
         lead = int(0.5 / self.frame_s)
         speaking = False; quiet = 0.0; started = time.monotonic(); speech_start = None
+        hot = 0   # frames in a row that sound like speech; three (0.1 s) start an utterance, so a click or a motor does not
         while True:
             frame = await self.mic.read()
             clip.append(frame)
@@ -200,7 +201,8 @@ class Ear:
             p = self.vad(frame)
             now = time.monotonic()
             if not speaking:
-                if p >= 0.5:
+                hot = hot + 1 if p >= 0.5 else 0
+                if hot >= 3:
                     speaking = True; speech_start = now; timings["speech_start"] = now
                     for f in clip[-lead:]: await frames.put(f)
                     stt = asyncio.create_task(self.transcribe(frames, timings, done))
@@ -213,6 +215,7 @@ class Ear:
                     timings["speech_end"] = min(now - quiet, timings.get("stt_done", now))
                     log.debug("speech ended, %.2fs of speech%s", timings["speech_end"] - speech_start, " (HA finished first)" if done.is_set() and quiet < silence else ""); break
         await frames.put(None)
+        self.preroll.extend(clip[-self.preroll.maxlen:])   # if the loop listens again, it starts from what was just heard
         if not speaking or stt is None:
             return {"timings": timings}
         res = await stt
@@ -311,7 +314,7 @@ class Ear:
                 await self.say_pending(); continue
             conversation = None; wait_s = LISTEN_TIMEOUT; followup = False
             while True:
-                res = await self.listen_and_transcribe(since, wait_s)
+                res = await self.listen_and_transcribe(since, since + wait_s - time.monotonic())
                 t = res["timings"]
                 rec = {"at": datetime.now().isoformat(timespec="seconds"), "followup": followup, "text": res.get("text"), "error": res.get("error"), "clip": res.get("clip"),
                        "speech_start_ms": ms(t["wake"], t["speech_start"]) if "speech_start" in t else None,
@@ -322,6 +325,11 @@ class Ear:
                 # (far-off talk, the TV at low volume) peaked under 4,600 and none of them was a real request.
                 if text and not followup and res.get("peak", 32768) < opt("min_peak", 5000):
                     rec["ignored"] = "too quiet to be meant for Teddy"; log.info("ignored: peak %s", res.get("peak")); self.record(rec); break
+                # A sound that was not words (a shade motor, a cough, the end of Teddy's own reply) used to close the
+                # window: on 2026-11-11 four follow-ups in a row died that way within two seconds, each before David
+                # spoke. Now the window stays open until its time is up.
+                if not text and "speech_start" in t and since + wait_s - time.monotonic() > 1.0:
+                    rec["kept_listening"] = True; self.record(rec); continue
                 if not text or not opt("speak", False):
                     self.record(rec); break
                 outcome = {}
