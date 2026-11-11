@@ -304,7 +304,37 @@ class Ear:
             self.mic.tape_until = time.monotonic() + secs; self.mic.tape = w
             log.info("test recording for %.0fs to %s", secs, name)
             return web.json_response({"ok": True, "file": name, "seconds": secs})
-        app = web.Application(); app.add_routes([web.post("/say", say), web.post("/record", record), web.get("/health", lambda r: web.json_response({"ok": True}))])
+        async def replay(req: web.Request):
+            """Play a test recording into the wake detector exactly as the ear does and report when it fired
+            (POST /replay {"file": "teddy-test-....wav", "fresh": true}). fresh=true opens a new connection after
+            every detection, as the ear does after every turn; false keeps one connection for the whole file."""
+            if req.headers.get("x-teddy-token", "") != opt("teddy_token", ""): return web.json_response({"error": "forbidden"}, status=403)
+            body = await req.json(); fresh = bool(body.get("fresh")); speed = float(body.get("speed", 8))
+            with wave.open(f"{LOG_DIR}/{os.path.basename(str(body.get('file')))}") as w: pcm = w.readframes(w.getnframes())
+            hits = []; pos = 0; conns = 0
+            while pos < len(pcm):
+                client = AsyncTcpClient(WAKE_HOST, WAKE_PORT); await client.connect(); conns += 1
+                await client.write_event(Detect(names=[WAKE_WORD]).event())
+                await client.write_event(AudioStart(rate=RATE, width=WIDTH, channels=CH, timestamp=0).event())
+                got = asyncio.Event()
+                async def reader():
+                    while True:
+                        ev = await client.read_event()
+                        if ev is None: return
+                        if Detection.is_type(ev.type):
+                            hits.append(round(pos / (RATE * WIDTH), 1)); got.set()
+                            if fresh: return
+                rt = asyncio.create_task(reader())
+                while pos < len(pcm) and not (fresh and got.is_set()):
+                    await client.write_event(AudioChunk(rate=RATE, width=WIDTH, channels=CH, audio=pcm[pos:pos + self.frame], timestamp=int(pos / (RATE * WIDTH) * 1000)).event())
+                    pos += self.frame
+                    await asyncio.sleep(self.frame_s / speed)
+                if pos >= len(pcm): await asyncio.sleep(2)
+                rt.cancel()
+                try: await client.disconnect()
+                except Exception: pass
+            return web.json_response({"hits": hits, "connections": conns, "seconds": round(len(pcm) / (RATE * WIDTH), 1)})
+        app = web.Application(); app.add_routes([web.post("/say", say), web.post("/record", record), web.post("/replay", replay), web.get("/health", lambda r: web.json_response({"ok": True}))])
         runner = web.AppRunner(app); await runner.setup()
         await web.TCPSite(runner, "0.0.0.0", 8099).start()
         log.info("say endpoint on :8099")
