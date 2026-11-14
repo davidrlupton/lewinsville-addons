@@ -18,14 +18,14 @@ export async function POST(req: Request) {
     if (body.scene) {
       const s = SCENES[body.scene as string];
       if (!s) return Response.json({ error: "unknown scene" }, { status: 400 });
-      await hub().callService("button", "press", {}, { entity_id: s.entity });
+      await hub().press(s.entity);
       log(`scene ${s.label}`, [`scene ${s.label}`], true);
       return Response.json({ ok: true, did: `scene ${s.label}` });
     }
     if (body.mood) {
       const m = ENTERTAIN.moods[body.mood as string];
       if (!m) return Response.json({ error: "unknown mood" }, { status: 400 });
-      await hub().callService("button", "press", {}, { entity_id: m.entity });
+      await hub().press(m.entity);
       log(`mood ${m.label}`, [`mood ${m.label}`], true);
       return Response.json({ ok: true, did: `mood ${m.label}` });
     }

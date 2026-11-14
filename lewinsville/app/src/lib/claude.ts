@@ -107,7 +107,7 @@ export function tools(person: Person) {
     description: "Run a whole-house scene from the Lutron system.",
     inputSchema: z.object({ scene: z.enum(["welcome", "day", "night", "away"]) }),
     run: async ({ scene }) => {
-      await hub().callService("button", "press", {}, { entity_id: SCENES[scene].entity });
+      await hub().press(SCENES[scene].entity);
       note(`scene ${SCENES[scene].label}`);
       return `Scene ${SCENES[scene].label} started.`;
     },
@@ -118,7 +118,7 @@ export function tools(person: Person) {
     description: "Run one of the Kitchen keypad moods for the open-plan first floor (living room, kitchen, dining, breakfast, foyer).",
     inputSchema: z.object({ mood: z.enum(["entertain", "accent", "night", "shades"]) }),
     run: async ({ mood }) => {
-      await hub().callService("button", "press", {}, { entity_id: ENTERTAIN.moods[mood].entity });
+      await hub().press(ENTERTAIN.moods[mood].entity);
       note(`mood ${ENTERTAIN.moods[mood].label}`);
       return `Mood ${ENTERTAIN.moods[mood].label} started.`;
     },

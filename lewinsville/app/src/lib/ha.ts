@@ -82,6 +82,14 @@ class Hub {
     return haCallService(this.conn!, domain, service, data, target);
   }
 
+  /** Press a keypad button. Home Assistant accepts a press on an entity that does not exist without complaint
+   *  (the four whole-house scenes pointed at wrong names until 2026-11-14 and silently did nothing), so check first. */
+  async press(entity_id: string) {
+    await this.connect();
+    if (!this.entities[entity_id]) throw new Error(`${entity_id} is not in Home Assistant`);
+    return haCallService(this.conn!, "button", "press", {}, { entity_id });
+  }
+
   /** Any websocket command (statistics, registries, ...). */
   async send<T>(msg: { type: string } & Record<string, unknown>): Promise<T> {
     await this.connect();

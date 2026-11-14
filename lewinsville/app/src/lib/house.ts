@@ -90,8 +90,8 @@ export function supportsColor(d: Device) { return ((d.attrs.supported_color_mode
 
 // Whole-house scenes are buttons on the Foyer keypad, programmed in Lutron.
 export const SCENES: Record<string, { entity: string; label: string }> = {
-  welcome: { entity: "button.foyer_foyer_inside_position_3_keypad_welcome", label: "Welcome" },
-  day: { entity: "button.foyer_foyer_inside_position_3_keypad_day", label: "Day" },
-  night: { entity: "button.foyer_foyer_inside_position_3_keypad_night", label: "Night" },
-  away: { entity: "button.foyer_foyer_inside_position_3_keypad_away", label: "Away" },
+  welcome: { entity: "button.first_floor_foyer_first_floor_foyer_foyer_inside_position_3_keypad_welcome", label: "Welcome" },
+  day: { entity: "button.first_floor_foyer_first_floor_foyer_foyer_inside_position_3_keypad_day", label: "Day" },
+  night: { entity: "button.first_floor_foyer_first_floor_foyer_foyer_inside_position_3_keypad_night", label: "Night" },
+  away: { entity: "button.first_floor_foyer_first_floor_foyer_foyer_inside_position_3_keypad_away", label: "Away" },
 };
