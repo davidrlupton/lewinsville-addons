@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   const token = process.env.TEDDY_TOKEN;
   if (!token || req.headers.get("x-teddy-token") !== token) return Response.json({ error: "forbidden" }, { status: 403 });
   if (!process.env.ANTHROPIC_API_KEY) return Response.json({ error: "no_api_key" }, { status: 503 });
-  const { text, conversation, who } = (await req.json()) as { text?: string; conversation?: string; who?: string };
+  const { text, conversation, who, heard } = (await req.json()) as { text?: string; conversation?: string; who?: string; heard?: string };
   if (!text?.trim()) return Response.json({ error: "no_text" }, { status: 400 });
   const streaming = new URL(req.url).searchParams.get("stream") === "1";
 
@@ -57,7 +57,9 @@ export async function POST(req: Request) {
   const id = conversation && threads.has(conversation) ? conversation : `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const thread = threads.get(id) ?? { history: [], last: now };
   threads.set(id, thread);
-  const user: ChatMessage = { role: "user", content: text.trim() };
+  // How the words reached Teddy, for the brain (the voice prompt in lib/claude.ts explains the tags).
+  const tag = who === "Kitchen puck" ? "[kitchen puck]" : heard === "followup" ? "[living room, follow-up]" : "[living room, after wake]";
+  const user: ChatMessage = { role: "user", content: `${tag} ${text.trim()}` };
 
   const enc = new TextEncoder();
   const run = async (emit: (o: object) => void) => {
