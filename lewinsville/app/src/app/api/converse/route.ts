@@ -16,7 +16,8 @@ export const maxDuration = 60;
 
 const VOICE: Person = { email: "voice@lewinsville.vip", name: "the family", role: "household", theme: "festival", wifiOnly: true };
 const THREAD_TTL = 5 * 60_000;
-const threads = new Map<string, { history: ChatMessage[]; last: number }>();
+const threads = new Map<string, { history: ChatMessage[]; last: number; acted?: string[] }>();
+const SAME_TALK = 120_000;   // a voice turn within two minutes of the last one, from either ear, is the same conversation
 
 function textOf(content: unknown) {
   if (typeof content === "string") return content;
@@ -54,12 +55,18 @@ export async function POST(req: Request) {
 
   const now = Date.now();
   for (const [k, v] of threads) if (now - v.last > THREAD_TTL) threads.delete(k);
-  const id = conversation && threads.has(conversation) ? conversation : `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  // One Teddy, one memory: the living-room ear and the kitchen puck each kept their own thread, so a question to
+  // the puck about what the ear had just done got "I haven't done anything" (2026-11-14). The most recent thread
+  // wins while it is fresh, whichever ear it came from.
+  const recent = [...threads.entries()].filter(([, v]) => now - v.last < SAME_TALK).sort((a, b) => b[1].last - a[1].last)[0]?.[0];
+  const id = recent ?? (conversation && threads.has(conversation) ? conversation : `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`);
   const thread = threads.get(id) ?? { history: [], last: now };
   threads.set(id, thread);
   // How the words reached Teddy, for the brain (the voice prompt in lib/claude.ts explains the tags).
   const tag = who === "Kitchen puck" ? "[kitchen puck]" : heard === "followup" ? "[living room, follow-up]" : "[living room, after wake]";
-  const user: ChatMessage = { role: "user", content: `${tag} ${text.trim()}` };
+  // The history keeps only what Teddy said, not its tool calls, so say what it actually did last time.
+  const acted = thread.acted?.length ? `[done by you in your last reply: ${thread.acted.join("; ").slice(0, 400)}] ` : "";
+  const user: ChatMessage = { role: "user", content: `${acted}${tag} ${text.trim()}` };
 
   const enc = new TextEncoder();
   const run = async (emit: (o: object) => void) => {
@@ -78,7 +85,7 @@ export async function POST(req: Request) {
             reply = textOf(ev.content) || reply;
             thread.history.push(user, ev.context as ChatMessage, { role: "assistant", content: ev.content } as ChatMessage);
             thread.history = thread.history.slice(-24);
-            thread.last = Date.now();
+            thread.last = Date.now(); thread.acted = [...did];
           }
         }
         if (buf.trim()) say(buf.trim());
