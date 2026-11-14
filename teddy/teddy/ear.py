@@ -22,7 +22,8 @@ from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.client import AsyncTcpClient
 from wyoming.wake import Detect, Detection
 
-from .voice import Voice, Player, pcm_of
+import re
+from .voice import Voice, Player, pcm_of, cue
 
 OPT = json.load(open("/data/options.json")) if os.path.exists("/data/options.json") else {}
 def opt(k, d): return OPT.get(k, d)
@@ -80,7 +81,7 @@ class Ear:
         self.frame = self.vad.chunk_bytes()           # 1024 bytes = 32 ms
         self.frame_s = self.frame / (RATE * WIDTH)
         self.mic = Mic(self.frame)
-        self.preroll = deque(maxlen=int(1.0 / self.frame_s))  # last second, kept for the clip
+        self.preroll = deque(maxlen=int(1.5 / self.frame_s))  # the last 1.5 s: the wake word itself, for the clip and for speech-to-text
         self.pipeline_id = None
         self.voice = Voice(opt)
         self.say_queue: asyncio.Queue = asyncio.Queue()   # texts other parts of the house ask Teddy to speak (the puck's brain)
@@ -187,13 +188,27 @@ class Ear:
         return out
 
     # ---- one utterance -----------------------------------------------------------------------------
-    async def listen_and_transcribe(self, since: float, wait_s: float) -> dict:
+    def chime(self, kind: str):
+        sink = opt("cue_sink", "")
+        if sink and not self.voice.quiet_now(): asyncio.create_task(cue(kind, sink))   # silent in quiet hours: the ear false-wakes at night
+
+    def save(self, clip: list) -> str | None:
+        if not opt("save_clips", True): return None
+        name = datetime.now().strftime("%Y%m%d-%H%M%S") + ".wav"
+        with wave.open(f"{CLIP_DIR}/{name}", "wb") as w:
+            w.setnchannels(CH); w.setsampwidth(WIDTH); w.setframerate(RATE); w.writeframes(b"".join(clip))
+        return name
+
+    async def listen_and_transcribe(self, since: float, wait_s: float, wake: bool = False) -> dict:
+        """wake=True: this follows the wake word, whose audio is in the pre-roll. Speech-to-text then gets the wake
+        word too, so the transcript reads "Hey Teddy, ..." when someone really called and the brain can tell a
+        call from a false wake."""
         timings = {"wake": since}
         frames: asyncio.Queue = asyncio.Queue()
         done = asyncio.Event()
         stt = None   # HA's cloud STT gives up on a stream that starts with ~3 s of silence, so it is opened
                      # only when speech begins and is handed the half second before it (2026-11-08).
-        clip = list(self.preroll)
+        clip = list(self.preroll); npre = len(clip)
         self.vad.reset()
         silence = opt("silence_seconds", 0.55); max_s = MAX_SECONDS
         lead = int(0.5 / self.frame_s)
@@ -209,7 +224,7 @@ class Ear:
                 hot = hot + 1 if p >= 0.5 else 0
                 if hot >= 3:
                     speaking = True; speech_start = now; timings["speech_start"] = now
-                    for f in clip[-lead:]: await frames.put(f)
+                    for f in (clip[:npre] + clip[max(npre, len(clip) - lead):] if wake else clip[-lead:]): await frames.put(f)
                     stt = asyncio.create_task(self.transcribe(frames, timings, done))
                     log.debug("speech started %.2fs in", now - since)
                 elif now - started > wait_s:
@@ -222,15 +237,11 @@ class Ear:
         await frames.put(None)
         self.preroll.extend(clip[-self.preroll.maxlen:])   # if the loop listens again, it starts from what was just heard
         if not speaking or stt is None:
-            return {"timings": timings}
+            return {"timings": timings, "clip": self.save(clip) if wake else None}   # what woke it, even when nothing followed
         res = await stt
         res["timings"] = timings
         res["peak"] = max(map(abs, array("h", b"".join(clip))), default=0)   # loudest sample, wake word included
-        if opt("save_clips", True):
-            name = datetime.now().strftime("%Y%m%d-%H%M%S") + ".wav"
-            with wave.open(f"{CLIP_DIR}/{name}", "wb") as w:
-                w.setnchannels(CH); w.setsampwidth(WIDTH); w.setframerate(RATE); w.writeframes(b"".join(clip))
-            res["clip"] = name
+        res["clip"] = self.save(clip)
         return res
 
     # ---- speaking ----------------------------------------------------------------------------------
@@ -253,6 +264,7 @@ class Ear:
                 pcm = pcm_of(wav) if wav else None
                 if not pcm: log.warning("no audio for a sentence"); continue
                 await prep
+                if "first_audio" not in timings: await player.write(bytes(12800))   # 0.4 s of silence: the Sonos line-in buffers before it sounds
                 timings.setdefault("first_audio", time.monotonic())
                 await player.write(pcm)
         feeder = asyncio.create_task(feed())
@@ -265,7 +277,6 @@ class Ear:
             await prep
             await player.finish()
             await asyncio.sleep(0.3)   # let the room settle before listening again
-            await self.voice.after_speaking()
             d.cancel(); await d
 
     # ---- speaking for others: POST /say {"text": ...} from the puck's brain (teddy_brain in HA) -------------
@@ -282,6 +293,7 @@ class Ear:
             except Exception as e:
                 log.warning("say: %s", e)
                 if not fut.done(): fut.set_exception(e)
+        await self.voice.end_exchange()
         self.preroll.clear()
 
     async def serve(self):
@@ -357,9 +369,11 @@ class Ear:
             since = await self.wait_for_wake()
             if since is None:
                 await self.say_pending(); continue
-            conversation = None; wait_s = LISTEN_TIMEOUT; followup = False
+            conversation = None; wait_s = LISTEN_TIMEOUT; followup = False; first = True
+            self.chime("wake")
             while True:
-                res = await self.listen_and_transcribe(since, since + wait_s - time.monotonic())
+                res = await self.listen_and_transcribe(since, since + wait_s - time.monotonic(), wake=first and not followup)
+                first = False
                 t = res["timings"]
                 rec = {"at": datetime.now().isoformat(timespec="seconds"), "followup": followup, "text": res.get("text"), "error": res.get("error"), "clip": res.get("clip"),
                        "speech_start_ms": ms(t["wake"], t["speech_start"]) if "speech_start" in t else None,
@@ -368,7 +382,9 @@ class Ear:
                 text = res.get("text"); rec["peak"] = res.get("peak")
                 # Someone talking to Teddy at the Jabra peaks at 10,000 to 32,000; the false wakes of 9-10 Nov
                 # (far-off talk, the TV at low volume) peaked under 4,600 and none of them was a real request.
-                if text and not followup and res.get("peak", 32768) < opt("min_peak", 5000):
+                named = bool(text and re.search(r"\bted", text.lower()))   # the transcript has the name in it: someone called
+                rec["named"] = named
+                if text and not followup and not named and res.get("peak", 32768) < opt("min_peak", 5000):
                     rec["ignored"] = "too quiet to be meant for Teddy"; log.info("ignored: peak %s", res.get("peak")); self.record(rec); break
                 # A sound that was not words (a shade motor, a cough, the end of Teddy's own reply) used to close the
                 # window: on 2026-11-11 four follow-ups in a row died that way within two seconds, each before David
@@ -379,7 +395,7 @@ class Ear:
                     self.record(rec); break
                 outcome = {}
                 async def sentences():
-                    async for m in self.voice.converse_stream(text, conversation):
+                    async for m in self.voice.converse_stream(text, conversation, "followup" if followup else "wake"):
                         if "sentence" in m: yield m["sentence"]
                         if m.get("done"):
                             outcome.update(m); t["think_done"] = time.monotonic()
@@ -394,8 +410,9 @@ class Ear:
                 self.record(rec)
                 follow_s = opt("followup_seconds", 8)
                 if follow_s <= 0 or not outcome.get("text"): break      # nothing was said (SILENCE): no window
-                if await self.voice.tv_on(): log.info("tv on: no follow-up window"); break
                 since = time.monotonic(); wait_s = follow_s; followup = True
+                self.chime("listening")
+            asyncio.create_task(self.voice.end_exchange())
             self.preroll.clear()
 
 

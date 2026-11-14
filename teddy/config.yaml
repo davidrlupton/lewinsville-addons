@@ -1,5 +1,5 @@
 name: Teddy
-version: "0.2.12"
+version: "0.2.13"
 slug: teddy
 description: Teddy on the Lenovo. Listens on the Jabra for "Hey Teddy", understands through the portal's Claude brain, answers in Ryan's voice through the Sonos, keeps listening for follow-ups. PLAN.md Phase 5.
 url: https://github.com/davidrlupton/Lewinsville
@@ -26,6 +26,7 @@ options:
   volume_quiet: 0.36
   quiet_from: "21:00"
   quiet_until: "08:00"
+  cue_sink: alsa_output.usb-0b0e_Jabra_SPEAK_510_USB_6CFBED58A953022000-00.analog-stereo   # soft tones on the Jabra's own speaker at a wake and when a follow-up window opens; empty = none; never in quiet hours
   save_clips: true                          # keep each utterance as a WAV under /share/lewinsville/teddy-clips
   debug: true
 schema:
@@ -40,5 +41,6 @@ schema:
   volume_quiet: float
   quiet_from: str
   quiet_until: str
+  cue_sink: str?
   save_clips: bool
   debug: bool

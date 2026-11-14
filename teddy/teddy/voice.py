@@ -67,40 +67,47 @@ class Voice:
             log.error("tts returned %r, not WAV; refusing to play it", audio[:4]); return None
         return audio
 
-    async def tv_on(self) -> bool:
-        """Is the living-room screen in use? Then its dialogue floods the follow-up window, so there is none."""
-        for e in ("media_player.home_theater_tv", "media_player.denon_living"):
-            st, body = await self.ha("GET", f"/api/states/{e}", timeout=5)
-            if st == 200 and json.loads(body).get("state") in ("on", "playing", "paused"): return True
-        return False
-
     # ---- Sonos ------------------------------------------------------------------------------------
     def quiet_now(self) -> bool:
         now = datetime.now().strftime("%H:%M")
         a, b = self.opt("quiet_from", "21:00"), self.opt("quiet_until", "08:00")
         return (a <= now or now < b) if a > b else (a <= now < b)
 
+    # The Amp was left to notice the line-in signal by itself (autoplay) and was paused again after every reply.
+    # Autoplay took about 0.6 s, which ate the first words, and it did not fire again within half a minute of the
+    # last reply, so follow-up answers were never heard (audit of 2026-11-14: 17 of 19 follow-up replies stayed
+    # "paused"). Now the line-in is started with an explicit play, stays live for the whole exchange, and the
+    # Sonos is put back as it was only when the exchange is over.
+    active = False
     async def before_speaking(self):
         sonos = self.opt("sonos_entity", "")
         if not sonos: return
-        vol = self.opt("volume_quiet", 0.25) if self.quiet_now() else self.opt("volume_day", 0.45)
-        await self.service("sonos", "snapshot", {"entity_id": sonos})
-        await self.service("media_player", "volume_set", {"entity_id": sonos, "volume_level": vol})
+        if not self.active:
+            vol = self.opt("volume_quiet", 0.25) if self.quiet_now() else self.opt("volume_day", 0.45)
+            await self.service("sonos", "snapshot", {"entity_id": sonos})
+            await self.service("media_player", "volume_set", {"entity_id": sonos, "volume_level": vol})
+            st, body = await self.ha("GET", f"/api/states/{sonos}", timeout=5)
+            if st == 200 and json.loads(body).get("attributes", {}).get("source") != "Line-in":
+                await self.service("media_player", "select_source", {"entity_id": sonos, "source": "Line-in"})
+            self.active = True
+        await self.service("media_player", "media_play", {"entity_id": sonos})
 
-    async def after_speaking(self):
+    async def end_exchange(self):
+        """The conversation is over: give the Sonos back (volume, source, and whatever it was playing)."""
         sonos = self.opt("sonos_entity", "")
-        if not sonos: return
+        if not sonos or not self.active: return
+        self.active = False
         await self.service("sonos", "restore", {"entity_id": sonos})
 
     # ---- the brain --------------------------------------------------------------------------------
-    async def converse_stream(self, text: str, conversation: str | None):
+    async def converse_stream(self, text: str, conversation: str | None, heard: str = "wake"):
         """Yield the portal's NDJSON objects: {"sentence": ...} as they come, then {"done": true, ...}."""
         url = PORTAL + "/api/converse?stream=1"
         headers = {"Content-Type": "application/json", "x-teddy-token": self.opt("teddy_token", "")}
         q: asyncio.Queue = asyncio.Queue(); loop = asyncio.get_running_loop()
         def worker():
             try:
-                req = urllib.request.Request(url, data=json.dumps({"text": text, "conversation": conversation, "who": "Living Room Ear"}).encode(), method="POST", headers=headers)
+                req = urllib.request.Request(url, data=json.dumps({"text": text, "conversation": conversation, "who": "Living Room Ear", "heard": heard}).encode(), method="POST", headers=headers)
                 with urllib.request.urlopen(req, timeout=50) as r:
                     for line in r:
                         if line.strip(): loop.call_soon_threadsafe(q.put_nowait, json.loads(line))
@@ -112,6 +119,26 @@ class Voice:
         threading.Thread(target=worker, daemon=True).start()
         while (m := await q.get()) is not None:
             yield m
+
+
+async def cue(kind: str, sink: str):
+    """A short soft tone on the Jabra's own speaker (its echo cancellation knows that speaker, and it is instant,
+    unlike the Sonos): two rising notes = "I heard Hey Teddy, go on"; one low note = "still listening"."""
+    import math
+    notes = [(660, 0.07), (990, 0.09)] if kind == "wake" else [(520, 0.08)]
+    pcm = bytearray()
+    for hz, secs in notes:
+        n = int(16000 * secs)
+        for i in range(n):
+            env = min(1.0, i / 160, (n - i) / 400)   # 10 ms in, 25 ms out: no click
+            pcm += struct.pack("<h", int(2500 * env * math.sin(2 * math.pi * hz * i / 16000)))
+    pcm += bytes(3200)
+    try:
+        p = await asyncio.create_subprocess_exec("aplay", "-q", "-r", "16000", "-c", "1", "-f", "S16_LE", "-t", "raw", "-",
+                                                 stdin=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL, env={**os.environ, "PULSE_SINK": sink})
+        p.stdin.write(bytes(pcm)); await p.stdin.drain(); p.stdin.close()
+        if await p.wait() != 0: log.warning("cue: aplay exit %s", p.returncode)
+    except Exception as e: log.warning("cue: %s", e)
 
 
 class Player:
