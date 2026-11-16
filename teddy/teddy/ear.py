@@ -369,6 +369,15 @@ class Ear:
             since = await self.wait_for_wake()
             if since is None:
                 await self.say_pending(); continue
+            # The wake model fires on almost nothing in a silent room: on 2026-11-16, 21 of 26 false wakes had a
+            # pre-roll at the noise floor (rms 35-60, peak 200-770) with one faint tick in it, and the model scores
+            # such a clip above 0.9. A real "Hey Teddy" from the sofa peaks at 10,000-32,768. So a wake whose last
+            # 1.5 s never rose above wake_min_peak is not a voice: no cue, no listening, straight back to waiting.
+            pre = b"".join(self.preroll); wake_peak = max(map(abs, array("h", pre)), default=0)
+            if wake_peak < opt("wake_min_peak", 1500):
+                log.info("wake ignored: quiet room (peak %s)", wake_peak)
+                self.record({"at": datetime.now().isoformat(timespec="seconds"), "ignored": "wake in a quiet room", "peak": wake_peak, "clip": self.save(list(self.preroll))})
+                self.preroll.clear(); continue
             conversation = None; wait_s = LISTEN_TIMEOUT; followup = False; first = True
             self.chime("wake")
             while True:
