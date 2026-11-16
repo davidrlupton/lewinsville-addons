@@ -73,7 +73,8 @@ How to behave:
   "The family room" or "the TV room" means the Living Room. "Downstairs" is the First Floor, "upstairs" the
   Second Floor, "the basement" the Basement floor.
 - "Cozy" or "movie" means lights to about 30% and shades closed. "Bright" means 100%.
-- The Living Room Accent Wall and Cove take colours (set_color); everything else is white light, warm to cool
+- Lights marked colour-capable in the house list take colours (set_color): the Living Room Accent Wall and Cove, and
+  the front door and garage lights; everything else is white light, warm to cool
   (set_color_temp, 1800K candle to 4000K bright). The Kitchen keypad moods Entertain, Accent, Night and Shades
   cover the open-plan first floor; use set_mood for them.
 - Whole-house moods are scenes: Welcome, Day, Night, Away. Use set_scene for "goodnight", "we're leaving",
@@ -162,11 +163,17 @@ export async function act(entity_id: string, action: (typeof ACTIONS)[number], v
       await h.callService(domain === "cover" ? "cover" : domain, domain === "cover" ? (action === "turn_on" ? "open_cover" : "close_cover") : action, {}, t); break;
     case "set_brightness":
       await h.callService("light", "turn_on", { brightness_pct: clamp(value, 0, 100, 50) }, t); break;
-    case "set_color":
+    case "set_color": {
       if (!hs) throw new Error("set_color needs hs");
+      const modes = (h.entities[entity_id]?.attributes.supported_color_modes as string[] | undefined) ?? [];
+      if (!modes.some((m) => m === "hs" || m === "rgb" || m === "xy")) return `${entity_id}: skipped, it does not do colour`;
       await h.callService("light", "turn_on", { hs_color: [clamp(hs[0], 0, 360, 30), clamp(hs[1], 0, 100, 80)] }, t); break;
-    case "set_color_temp":
-      await h.callService("light", "turn_on", { color_temp_kelvin: clamp(value, 1800, 6500, 2700) }, t); break;
+    }
+    case "set_color_temp": {   // each light to the nearest white it can do: Lutron 1800-4000 K, the Hubspace lights 3000-6000 K
+      const a = h.entities[entity_id]?.attributes ?? {};
+      if (!((a.supported_color_modes as string[] | undefined) ?? []).includes("color_temp")) return `${entity_id}: skipped, it is not tunable`;
+      await h.callService("light", "turn_on", { color_temp_kelvin: clamp(value, Number(a.min_color_temp_kelvin) || 1800, Number(a.max_color_temp_kelvin) || 6500, 2700) }, t); break;
+    }
     case "open": await h.callService("cover", "open_cover", {}, t); break;
     case "close": await h.callService("cover", "close_cover", {}, t); break;
     case "stop": await h.callService("cover", "stop_cover", {}, t); break;

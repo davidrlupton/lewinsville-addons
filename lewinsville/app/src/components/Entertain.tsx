@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { ENTERTAIN, supportsColor, type House } from "@/lib/house";
-import { ColorRow, currentColor, DeviceTile, FLOOR_COLOR, MediaCard } from "@/components/Tiles";
+import { DeviceTile, FLOOR_COLOR, GroupLights, MediaCard } from "@/components/Tiles";
 
 type Call = (body: Record<string, unknown>) => Promise<boolean>;
 
@@ -13,14 +13,11 @@ export function Entertain({ house, call }: { house: House; call: Call }) {
   const accents = lights.filter(supportsColor);
   const covers = devices.filter((d) => d.domain === "cover");
   const media = devices.filter((d) => d.domain === "media_player");
-  const on = lights.filter((d) => d.state === "on");
   const [armed, setArmed] = useState<string | null>(null);
   const confirmThen = (key: string, fn: () => void) => {
     if (armed === key) { setArmed(null); fn(); return; }
     setArmed(key); setTimeout(() => setArmed((a) => (a === key ? null : a)), 3000);
   };
-  const [drag, setDrag] = useState<number | null>(null);
-  const accentPct = accents.length ? Math.round(accents.reduce((s, d) => s + (d.state === "on" && typeof d.attrs.brightness === "number" ? d.attrs.brightness / 2.55 : 0), 0) / accents.length) : 0;
 
   return (
     <div className="space-y-5">
@@ -37,32 +34,9 @@ export function Entertain({ house, call }: { house: House; call: Call }) {
         </div>
       </section>
 
-      {accents.length > 0 && (
-        <section className="card p-4">
-          <div className="mb-1 flex items-center justify-between">
-            <h2 className="text-lg font-extrabold">Accent colour</h2>
-            <span className="label">{accents.map((a) => a.name).join(" + ")}</span>
-          </div>
-          <ColorRow ids={accents.map((a) => a.id)} call={call} selected={(() => { const s = new Set(accents.map(currentColor)); return s.size === 1 ? [...s][0] : null; })()} />
-          <div className="mt-2 flex items-center gap-3">
-            <span className="num w-10 text-xs font-bold text-ink-soft">{drag ?? accentPct}%</span>
-            <input type="range" min={0} max={100} value={drag ?? accentPct} aria-label="Accent brightness" onChange={(e) => setDrag(Number(e.target.value))}
-              onPointerUp={() => { if (drag != null) { call(drag === 0 ? { entity_ids: accents.map((a) => a.id), action: "turn_off" } : { entity_ids: accents.map((a) => a.id), action: "set_brightness", value: drag }); setDrag(null); } }} />
-          </div>
-        </section>
-      )}
-
-      <section className="card p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-lg font-extrabold">Everything here</h2>
-          <span className="label">{on.length} of {lights.length} lights on</span>
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-sm font-bold">
-          <button className="rounded-2xl bg-sky/25 py-3" onClick={() => call({ entity_ids: lights.map((l) => l.id), action: "set_color_temp", value: 4000 })}>Cool white</button>
-          <button className="rounded-2xl bg-marigold/30 py-3" onClick={() => call({ entity_ids: lights.map((l) => l.id), action: "set_color_temp", value: 2200 })}>Warm</button>
-          <button className="rounded-2xl bg-ink/10 py-3" onClick={() => confirmThen("off", () => call({ entity_ids: lights.map((l) => l.id), action: "turn_off" }))}>{armed === "off" ? "Tap again" : "All off"}</button>
-        </div>
-      </section>
+      {accents.length > 0 && <GroupLights lights={accents} call={call} title="Accent colour" />}
+      <GroupLights lights={lights} call={call} title="Every light here" />
+      <button className="w-full rounded-2xl bg-ink/10 py-3 text-sm font-bold" onClick={() => confirmThen("off", () => call({ entity_ids: lights.map((l) => l.id), action: "turn_off" }))}>{armed === "off" ? "Tap again" : "All off"}</button>
 
       {rooms.map((r) => {
         const rl = r.devices.filter((d) => d.domain === "light");

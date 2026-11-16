@@ -2,7 +2,7 @@
 import type { House, Room } from "@/lib/house";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useHouse } from "@/components/useHouse";
-import { ClimateCard, DeviceTile, FLOOR_COLOR, MediaCard } from "@/components/Tiles";
+import { ClimateCard, DeviceTile, FLOOR_COLOR, GroupLights, MediaCard } from "@/components/Tiles";
 import { Icon, type IconName } from "@/components/Icons";
 import { Chat } from "@/components/Chat";
 import { Entertain } from "@/components/Entertain";
@@ -203,6 +203,7 @@ export default function Page() {
                   <button className="rounded-full bg-ink px-3 py-1.5 text-cream" onClick={() => call({ entity_ids: lights.map((l) => l.id), action: "turn_off" })}>All off</button>
                 </div>}
               </div>
+              <div className="mb-3"><GroupLights lights={lights} call={call} title="All lights" /></div>
               <div className="stagger grid grid-cols-1 gap-2 sm:grid-cols-2">{r.devices.map((d) => <DeviceTile key={d.id} d={d} call={call} color={FLOOR_COLOR[r.floor]} />)}</div>
             </section>
           );

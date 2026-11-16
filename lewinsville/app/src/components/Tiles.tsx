@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { NO_PARTIAL_COVERS, supportsColor, type Device } from "@/lib/house";
 
 type Call = (body: Record<string, unknown>) => Promise<boolean>;
@@ -7,56 +7,62 @@ export const FLOOR_COLOR: Record<string, string> = {
   "First Floor": "var(--floor-first)", "Second Floor": "var(--floor-second)", Loft: "var(--floor-loft)", Basement: "var(--floor-basement)", Exterior: "var(--floor-exterior)",
 };
 
-// Colour presets for the accent lights. hs = [hue, saturation]; k = kelvin for white light.
-export const COLORS: { name: string; hs?: [number, number]; k?: number; swatch: string }[] = [
-  { name: "Candle", k: 2000, swatch: "#ffb35c" }, { name: "Warm", k: 2700, swatch: "#ffd1a3" }, { name: "Bright", k: 4000, swatch: "#fff1e0" },
-  { name: "Amber", hs: [38, 100], swatch: "hsl(38 100% 55%)" }, { name: "Coral", hs: [12, 80], swatch: "hsl(12 80% 58%)" }, { name: "Rose", hs: [335, 70], swatch: "hsl(335 70% 60%)" },
-  { name: "Violet", hs: [272, 70], swatch: "hsl(272 70% 60%)" }, { name: "Blue", hs: [220, 85], swatch: "hsl(220 85% 58%)" }, { name: "Teal", hs: [176, 80], swatch: "hsl(176 80% 42%)" }, { name: "Green", hs: [120, 65], swatch: "hsl(120 65% 45%)" },
+// The colours a colour-capable light can be set to: the rainbow, fully saturated. White light is not a chip but
+// the warmth slider below (warm to cool), which every tunable light has, colour-capable or not.
+export const COLORS: { name: string; hs: [number, number]; swatch: string }[] = [
+  { name: "Red", hs: [0, 100], swatch: "hsl(0 100% 50%)" }, { name: "Orange", hs: [28, 100], swatch: "hsl(28 100% 50%)" },
+  { name: "Yellow", hs: [56, 100], swatch: "hsl(56 100% 50%)" }, { name: "Green", hs: [120, 100], swatch: "hsl(120 100% 40%)" },
+  { name: "Blue", hs: [225, 100], swatch: "hsl(225 100% 50%)" }, { name: "Indigo", hs: [258, 100], swatch: "hsl(258 100% 45%)" },
+  { name: "Violet", hs: [288, 100], swatch: "hsl(288 100% 50%)" },
 ];
-/** The preset a light is showing now, by nearest white temperature (within 450 K) or nearest hue, or null. */
+export function supportsTemp(d: Device) { return ((d.attrs.supported_color_modes as string[] | undefined) ?? []).includes("color_temp"); }
+const kelvinOf = (d: Device) => (d.state === "on" && d.attrs.color_mode === "color_temp" && typeof d.attrs.color_temp_kelvin === "number" ? d.attrs.color_temp_kelvin : null);
+const pctOf = (d: Device) => (typeof d.attrs.brightness === "number" ? Math.round(d.attrs.brightness / 2.55) : 100);
+
+/** The rainbow chip a light is showing now (nearest hue, when it is showing a colour and not white), or null. */
 export function currentColor(d: Device): string | null {
-  if (d.state !== "on") return null;
-  const k = d.attrs.color_temp_kelvin;
-  if (d.attrs.color_mode === "color_temp" && typeof k === "number") {
-    let best: string | null = null, gap = 450;
-    for (const c of COLORS) if (c.k && Math.abs(c.k - k) < gap) { gap = Math.abs(c.k - k); best = c.name; }
-    return best;
-  }
-  if (Array.isArray(d.attrs.hs_color)) {
-    const [h, s] = d.attrs.hs_color as number[];
-    let best: string | null = null, gap = 20;
-    for (const c of COLORS) if (c.hs) {
-      const dh = Math.min(Math.abs(c.hs[0] - h), 360 - Math.abs(c.hs[0] - h)), dist = dh + Math.abs(c.hs[1] - s) / 4;
-      if (dist < gap) { gap = dist; best = c.name; }
-    }
-    return best;
-  }
-  return null;
+  if (d.state !== "on" || d.attrs.color_mode === "color_temp" || !Array.isArray(d.attrs.hs_color)) return null;
+  const [h, sat] = d.attrs.hs_color as number[];
+  if (sat < 35) return null;
+  let best: string | null = null, gap = 22;
+  for (const c of COLORS) { const dh = Math.min(Math.abs(c.hs[0] - h), 360 - Math.abs(c.hs[0] - h)); if (dh < gap) { gap = dh; best = c.name; } }
+  return best;
 }
-/** The chips. `selected` is the preset in use, which gets the ring; tapping another moves the ring there at once. */
-export function ColorRow({ ids, call, whiteOnly = false, selected = null }: { ids: string[]; call: Call; whiteOnly?: boolean; selected?: string | null }) {
+/** The chips. `selected` is the colour in use, which gets the ring; tapping another moves the ring there at once. */
+export function ColorRow({ ids, call, selected = null }: { ids: string[]; call: Call; selected?: string | null }) {
   const [picked, setPicked] = useState<string | null>(null);   // optimistic, until the light reports back
   const shown = picked ?? selected;
-  const row = useRef<HTMLDivElement>(null);
-  // The row scrolls sideways; bring the colour in use into view so its ring is seen, without moving the page.
-  useEffect(() => {
-    const r = row.current, el = r?.querySelector<HTMLElement>('[aria-checked="true"]');
-    if (r && el && !picked) r.scrollTo({ left: Math.max(0, el.offsetLeft - (r.clientWidth - el.offsetWidth) / 2), behavior: "smooth" });
-  }, [selected, picked]);
   return (
-    <div ref={row} className="scroll-x mt-2 flex gap-2 py-1" role="radiogroup" aria-label="Colour">
-      {COLORS.filter((c) => !whiteOnly || c.k).map((c) => (
+    <div className="mt-2 flex justify-between gap-1 py-1" role="radiogroup" aria-label="Colour">
+      {COLORS.map((c) => (
         <button key={c.name} className="chip" title={c.name} aria-label={c.name} role="radio" aria-checked={shown === c.name} style={{ background: c.swatch }}
           onPointerDown={() => setPicked(c.name)} onBlur={() => setPicked(null)}
-          onClick={() => call(c.hs ? { entity_ids: ids, action: "set_color", hs: c.hs } : { entity_ids: ids, action: "set_color_temp", value: c.k })} />
+          onClick={() => call({ entity_ids: ids, action: "set_color", hs: c.hs })} />
       ))}
+    </div>
+  );
+}
+/** White light, warm on the left to cool on the right, over the range these lights can do. */
+export function Warmth({ lights, call, label }: { lights: Device[]; call: Call; label?: string }) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const tun = lights.filter(supportsTemp);
+  if (!tun.length) return null;
+  const lo = Math.min(...tun.map((d) => Number(d.attrs.min_color_temp_kelvin) || 2000)), hi = Math.max(...tun.map((d) => Number(d.attrs.max_color_temp_kelvin) || 4000));
+  const ks = tun.map(kelvinOf).filter((k): k is number => k != null);
+  const now = ks.length ? Math.round(ks.reduce((x, y) => x + y, 0) / ks.length) : null;
+  return (
+    <div className="mt-2 flex items-center gap-3">
+      {label && <span className="label w-20 shrink-0">{label}</span>}
+      <input type="range" className="warmth" min={lo} max={hi} step={50} value={drag ?? now ?? Math.round((lo + hi) / 2)} aria-label="Warm to cool white" style={{ opacity: now == null && drag == null ? 0.6 : 1 }}
+        onChange={(e) => setDrag(Number(e.target.value))}
+        onPointerUp={() => { if (drag != null) { call({ entity_ids: tun.map((d) => d.id), action: "set_color_temp", value: drag }); setDrag(null); } }} />
     </div>
   );
 }
 
 export function LightTile({ d, call, color }: { d: Device; call: Call; color: string }) {
   const on = d.state === "on";
-  const pct = typeof d.attrs.brightness === "number" ? Math.round(d.attrs.brightness / 2.55) : 100;
+  const pct = pctOf(d);
   const [drag, setDrag] = useState<number | null>(null);
   return (
     <div className="tile" style={{ background: on ? `var(--on, ${color})` : "var(--card)", color: on ? "var(--on-ink)" : "var(--ink)" }}>
@@ -70,8 +76,38 @@ export function LightTile({ d, call, color }: { d: Device; call: Call; color: st
           onPointerUp={() => { if (drag != null) { call({ entity_id: d.id, action: "set_brightness", value: drag }); setDrag(null); } }}
           className="mt-2" />
       )}
+      {on && <Warmth lights={[d]} call={call} />}
       {on && supportsColor(d) && <ColorRow ids={[d.id]} call={call} selected={currentColor(d)} />}
     </div>
+  );
+}
+
+/** Several lights as one: brightness, warm-to-cool white, and the rainbow for those that take colour. The sliders
+ *  act on the lights that are on, or on all of them when none is. */
+export function GroupLights({ lights, call, title }: { lights: Device[]; call: Call; title: string }) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const lit = lights.filter((d) => d.state === "on");
+  const target = lit.length ? lit : lights;
+  const dim = target.filter((d) => ((d.attrs.supported_color_modes as string[] | undefined) ?? []).some((m) => m !== "onoff"));
+  const colour = target.filter(supportsColor);
+  if (dim.length < 2) return null;
+  const pct = lit.length ? Math.round(lit.reduce((x, d) => x + pctOf(d), 0) / lit.length) : 0;
+  const shades = new Set(colour.map(currentColor));
+  return (
+    <section className="card p-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-extrabold">{title}</h2>
+        <span className="label">{lit.length} of {lights.length} on</span>
+      </div>
+      <div className="mt-2 flex items-center gap-3">
+        <span className="label w-20 shrink-0">Brightness</span>
+        <input type="range" min={1} max={100} value={drag ?? (pct || 1)} aria-label={`${title} brightness`} onChange={(e) => setDrag(Number(e.target.value))}
+          onPointerUp={() => { if (drag != null) { call({ entity_ids: dim.map((d) => d.id), action: "set_brightness", value: drag }); setDrag(null); } }} />
+        <span className="num w-9 text-right text-xs font-bold text-ink-soft">{drag ?? pct}%</span>
+      </div>
+      <Warmth lights={target} call={call} label="Warmth" />
+      {colour.length > 0 && <ColorRow ids={colour.map((d) => d.id)} call={call} selected={shades.size === 1 ? [...shades][0] : null} />}
+    </section>
   );
 }
 

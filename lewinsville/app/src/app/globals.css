@@ -131,6 +131,10 @@ button:disabled:active { transform: none; }
 .chip[aria-checked="true"] { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink), 0 2px 6px rgba(0,0,0,.15); transform: scale(1.1); }
 .chip[aria-checked="true"]:active { transform: scale(1.02); }
 
+/* The warm-to-cool white slider wears its own colours, candle on the left to daylight on the right. */
+input[type=range].warmth::-webkit-slider-runnable-track { background: linear-gradient(90deg, #ff9a3c, #ffd2a1 40%, #fff6ea 68%, #cfe1ff); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+input[type=range].warmth::-moz-range-track { background: linear-gradient(90deg, #ff9a3c, #ffd2a1 40%, #fff6ea 68%, #cfe1ff); box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+
 /* Range sliders: a thumb a thumb can find. Native tracking is already 1:1 with the finger. */
 input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; accent-color: var(--marigold); touch-action: pan-x; cursor: pointer; }
 input[type=range]::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 18%, transparent); }
