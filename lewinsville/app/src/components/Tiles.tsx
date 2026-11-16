@@ -17,6 +17,17 @@ export const COLORS: { name: string; hs: [number, number]; swatch: string }[] = 
 ];
 export function supportsTemp(d: Device) { return ((d.attrs.supported_color_modes as string[] | undefined) ?? []).includes("color_temp"); }
 const kelvinOf = (d: Device) => (d.state === "on" && d.attrs.color_mode === "color_temp" && typeof d.attrs.color_temp_kelvin === "number" ? d.attrs.color_temp_kelvin : null);
+// Brightness sliders stop at 1 % and then every 10 %: eleven notches, 0 = 1 %.
+const notch = (pct: number) => (pct < 6 ? 0 : Math.round(pct / 10));
+const pctAt = (n: number) => (n === 0 ? 1 : n * 10);
+/** The colour of white light at a temperature, for the warmth slider's track (Tanner Helland's fit to the black-body curve). */
+function kelvinCss(k: number) {
+  const t = k / 100, c = (v: number) => Math.round(Math.max(0, Math.min(255, v)));
+  const r = t <= 66 ? 255 : 329.698727446 * (t - 60) ** -0.1332047592;
+  const g = t <= 66 ? 99.4708025861 * Math.log(t) - 161.1195681661 : 288.1221695283 * (t - 60) ** -0.0755148492;
+  const b = t >= 66 ? 255 : t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307;
+  return `rgb(${c(r)} ${c(g)} ${c(b)})`;
+}
 const pctOf = (d: Device) => (typeof d.attrs.brightness === "number" ? Math.round(d.attrs.brightness / 2.55) : 100);
 
 /** The rainbow chip a light is showing now (nearest hue, when it is showing a colour and not white), or null. */
@@ -53,7 +64,8 @@ export function Warmth({ lights, call, label }: { lights: Device[]; call: Call; 
   return (
     <div className="mt-2 flex items-center gap-3">
       {label && <span className="label w-20 shrink-0">{label}</span>}
-      <input type="range" className="warmth" min={lo} max={hi} step={(hi - lo) / 10} value={drag ?? now ?? Math.round((lo + hi) / 2)} aria-label="Warm to cool white" style={{ opacity: now == null && drag == null ? 0.6 : 1 }}
+      <input type="range" className="warmth" min={lo} max={hi} step={(hi - lo) / 10} value={drag ?? now ?? Math.round((lo + hi) / 2)} aria-label="Warm to cool white"
+        style={{ opacity: now == null && drag == null ? 0.6 : 1, ["--track" as string]: `linear-gradient(90deg, ${[0, 0.25, 0.5, 0.75, 1].map((f) => kelvinCss(lo + f * (hi - lo))).join(", ")})` }}
         onChange={(e) => setDrag(Number(e.target.value))}
         onPointerUp={() => { if (drag != null) { call({ entity_ids: tun.map((d) => d.id), action: "set_color_temp", value: drag }); setDrag(null); } }} />
     </div>
@@ -71,8 +83,8 @@ export function LightTile({ d, call, color }: { d: Device; call: Call; color: st
         <span className="num text-xs font-bold opacity-70">{on ? `${drag ?? pct}%` : "off"}</span>
       </button>
       {on && (
-        <input type="range" min={10} max={100} step={10} value={drag ?? pct} aria-label={`${d.name} brightness`}
-          onChange={(e) => setDrag(Number(e.target.value))}
+        <input type="range" min={0} max={10} step={1} value={notch(drag ?? pct)} aria-label={`${d.name} brightness`}
+          onChange={(e) => setDrag(pctAt(Number(e.target.value)))}
           onPointerUp={() => { if (drag != null) { call({ entity_id: d.id, action: "set_brightness", value: drag }); setDrag(null); } }}
           className="mt-2" />
       )}
@@ -101,7 +113,7 @@ export function GroupLights({ lights, call, title }: { lights: Device[]; call: C
       </div>
       <div className="mt-2 flex items-center gap-3">
         <span className="label w-20 shrink-0">Brightness</span>
-        <input type="range" min={10} max={100} step={10} value={drag ?? (pct || 10)} aria-label={`${title} brightness`} onChange={(e) => setDrag(Number(e.target.value))}
+        <input type="range" min={0} max={10} step={1} value={notch(drag ?? pct)} aria-label={`${title} brightness`} onChange={(e) => setDrag(pctAt(Number(e.target.value)))}
           onPointerUp={() => { if (drag != null) { call({ entity_ids: dim.map((d) => d.id), action: "set_brightness", value: drag }); setDrag(null); } }} />
         <span className="num w-9 text-right text-xs font-bold text-ink-soft">{drag ?? pct}%</span>
       </div>
