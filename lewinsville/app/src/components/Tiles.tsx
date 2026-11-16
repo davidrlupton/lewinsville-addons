@@ -33,7 +33,7 @@ export function ColorRow({ ids, call, selected = null }: { ids: string[]; call: 
   const [picked, setPicked] = useState<string | null>(null);   // optimistic, until the light reports back
   const shown = picked ?? selected;
   return (
-    <div className="mt-2 flex justify-between gap-1 py-1" role="radiogroup" aria-label="Colour">
+    <div className="chips mt-2 py-1" role="radiogroup" aria-label="Colour">
       {COLORS.map((c) => (
         <button key={c.name} className="chip" title={c.name} aria-label={c.name} role="radio" aria-checked={shown === c.name} style={{ background: c.swatch }}
           onPointerDown={() => setPicked(c.name)} onBlur={() => setPicked(null)}
@@ -53,7 +53,7 @@ export function Warmth({ lights, call, label }: { lights: Device[]; call: Call; 
   return (
     <div className="mt-2 flex items-center gap-3">
       {label && <span className="label w-20 shrink-0">{label}</span>}
-      <input type="range" className="warmth" min={lo} max={hi} step={50} value={drag ?? now ?? Math.round((lo + hi) / 2)} aria-label="Warm to cool white" style={{ opacity: now == null && drag == null ? 0.6 : 1 }}
+      <input type="range" className="warmth" min={lo} max={hi} step={(hi - lo) / 10} value={drag ?? now ?? Math.round((lo + hi) / 2)} aria-label="Warm to cool white" style={{ opacity: now == null && drag == null ? 0.6 : 1 }}
         onChange={(e) => setDrag(Number(e.target.value))}
         onPointerUp={() => { if (drag != null) { call({ entity_ids: tun.map((d) => d.id), action: "set_color_temp", value: drag }); setDrag(null); } }} />
     </div>
@@ -71,7 +71,7 @@ export function LightTile({ d, call, color }: { d: Device; call: Call; color: st
         <span className="num text-xs font-bold opacity-70">{on ? `${drag ?? pct}%` : "off"}</span>
       </button>
       {on && (
-        <input type="range" min={1} max={100} value={drag ?? pct} aria-label={`${d.name} brightness`}
+        <input type="range" min={10} max={100} step={10} value={drag ?? pct} aria-label={`${d.name} brightness`}
           onChange={(e) => setDrag(Number(e.target.value))}
           onPointerUp={() => { if (drag != null) { call({ entity_id: d.id, action: "set_brightness", value: drag }); setDrag(null); } }}
           className="mt-2" />
@@ -101,7 +101,7 @@ export function GroupLights({ lights, call, title }: { lights: Device[]; call: C
       </div>
       <div className="mt-2 flex items-center gap-3">
         <span className="label w-20 shrink-0">Brightness</span>
-        <input type="range" min={1} max={100} value={drag ?? (pct || 1)} aria-label={`${title} brightness`} onChange={(e) => setDrag(Number(e.target.value))}
+        <input type="range" min={10} max={100} step={10} value={drag ?? (pct || 10)} aria-label={`${title} brightness`} onChange={(e) => setDrag(Number(e.target.value))}
           onPointerUp={() => { if (drag != null) { call({ entity_ids: dim.map((d) => d.id), action: "set_brightness", value: drag }); setDrag(null); } }} />
         <span className="num w-9 text-right text-xs font-bold text-ink-soft">{drag ?? pct}%</span>
       </div>
@@ -170,7 +170,7 @@ export function CoverTile({ d, call, color }: { d: Device; call: Call; color: st
           <button className="rounded-xl py-2" style={{ background: "var(--cream)", color: "var(--ink)" }} onClick={() => call({ entity_id: d.id, action: "close" })}>Close</button>
         </div>
       ) : (
-        <input type="range" min={0} max={100} value={shown ?? 0} aria-label={`${d.name} position`}
+        <input type="range" min={0} max={100} step={10} value={shown ?? 0} aria-label={`${d.name} position`}
           onChange={(e) => setDrag(Number(e.target.value))}
           onPointerUp={() => { if (drag != null) { call({ entity_id: d.id, action: drag === 0 ? "close" : drag === 100 ? "open" : "set_position", value: drag }); setDrag(null); } }}
           className="mt-2" />

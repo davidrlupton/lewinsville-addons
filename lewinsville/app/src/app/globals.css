@@ -126,6 +126,9 @@ button:disabled:active { transform: none; }
   button:not(:disabled):hover, [role="button"]:hover, .tile:hover, .scene:hover { filter: brightness(1.03); }
 }
 
+/* The colour chips stay finger-sized: one row in a full card, two rows (four and three) in a half-width tile on a phone. */
+.chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(1.75rem, 1fr)); gap: 0.45rem 0.3rem; justify-items: center; }
+.chips .chip { width: min(2rem, 100%); height: auto; aspect-ratio: 1; }
 .chip { width: 2rem; height: 2rem; border-radius: 9999px; border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line), 0 2px 6px rgba(0,0,0,.15); flex: none; }
 /* The colour in use wears a ring in the ink colour, a gap of card between, and sits a touch larger. The ring moves with the chip's own transition. */
 .chip[aria-checked="true"] { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--ink), 0 2px 6px rgba(0,0,0,.15); transform: scale(1.1); }
