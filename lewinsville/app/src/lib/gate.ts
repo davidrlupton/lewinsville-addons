@@ -43,11 +43,28 @@ export function activePause(p: Pauses, email: string): Pause | null {
   return x;
 }
 
-/** Did this request come from inside the house? */
+// The house's public address, asked of Cloudflare from the hub itself (which sits in the house). The UniFi
+// integration alone was not enough: it broke on 2026-11-17 and every wifi-only person was turned away for three
+// days with "only works on the house wifi" while standing in the kitchen. Checked every five minutes; the last
+// good answer is kept if a check fails.
+let wan: { ip: string; at: number } | null = null;
+async function publicIp(): Promise<string | null> {
+  if (wan && Date.now() - wan.at < 300_000) return wan.ip;
+  try {
+    const t = await (await fetch("https://1.1.1.1/cdn-cgi/trace", { signal: AbortSignal.timeout(4000) })).text();
+    const ip = /^ip=(.+)$/m.exec(t)?.[1]?.trim();
+    if (ip) wan = { ip, at: Date.now() };
+  } catch { /* keep the last answer */ }
+  return wan?.ip ?? null;
+}
+
+/** Did this request come from inside the house? True when Cloudflare saw it arrive from the house's own public
+ *  address, as the router reports it (UniFi integration) or as the hub sees it from outside. */
 export async function fromHouse(headers: Headers): Promise<boolean> {
   const ip = headers.get("cf-connecting-ip");
   if (!ip) return false;
-  try { const h = hub(); await h.connect(); return h.entities[DREAM]?.attributes?.ip === ip; } catch { return false; }
+  try { const h = hub(); await h.connect(); if (h.entities[DREAM]?.attributes?.ip === ip) return true; } catch { /* fall through */ }
+  return (await publicIp()) === ip;
 }
 /** Is this person's known phone on the house network? null when no phone is on record. */
 export async function deviceHome(device?: string): Promise<boolean | null> {
