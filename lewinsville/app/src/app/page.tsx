@@ -119,8 +119,8 @@ export default function Page() {
         <div key="home" className="enter space-y-5">
           <section>
             <div className="grid grid-cols-2 gap-3">
-              {([["welcome", "Welcome"], ["day", "Day"], ["night", "Night"], ["away", "Away"]] as const).map(([k, l]) => (
-                <button key={k} className="scene jaali h-24 text-2xl font-extrabold text-white shadow-lg" style={{ background: `var(--scene-${k})`, ...ring(k) }} onClick={() => confirmThen(k, () => call({ scene: k }))}>{armed === k ? "Tap again" : l}</button>
+              {([["welcome", "Welcome", "welcome"], ["all_off", "All off", "night"]] as const).map(([k, l, tint]) => (
+                <button key={k} className="scene jaali h-24 text-2xl font-extrabold text-white shadow-lg" style={{ background: `var(--scene-${tint})`, ...ring(k) }} onClick={() => confirmThen(k, () => call({ scene: k }))}>{armed === k ? "Tap again" : l}</button>
               ))}
             </div>
           </section>

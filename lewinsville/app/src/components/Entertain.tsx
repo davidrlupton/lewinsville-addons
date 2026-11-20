@@ -24,11 +24,11 @@ export function Entertain({ house, call }: { house: House; call: Call }) {
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-extrabold">Moods</h2>
-          <span className="label">Kitchen keypad</span>
+          <span className="label">As on the keypads</span>
         </div>
         <div className="grid grid-cols-4 gap-2">
-          {Object.entries(ENTERTAIN.moods).map(([k, m]) => (
-            <button key={k} className="scene jaali h-20 text-sm font-extrabold text-white shadow-lg" style={{ background: `var(--scene-${k === "entertain" ? "welcome" : k === "accent" ? "day" : k === "night" ? "night" : "away"})` }}
+          {Object.entries(ENTERTAIN.moods).map(([k, m], i) => (
+            <button key={k} className="scene jaali h-16 text-sm font-extrabold text-white shadow-lg" style={{ background: `var(--scene-${["welcome", "day", "night", "away"][i % 4]})` }}
               onClick={() => call({ mood: k })}>{m.label}</button>
           ))}
         </div>

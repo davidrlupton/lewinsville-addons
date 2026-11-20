@@ -7,6 +7,7 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { hub, haFetch, type HassEntities } from "./ha";
+import { ENTERTAINING_LED } from "./house";
 import { client, VOICE_MODEL } from "./claude";
 import { everyone } from "./identity";
 
@@ -41,7 +42,7 @@ const ago = (iso: string | undefined) => (iso && !Number.isNaN(Date.parse(iso)) 
 function context(camera: string, kind: string, ents: HassEntities, k: Known) {
   const now = new Date();
   const prot = inHours(hhmm(now), k.protected_hours.from, k.protected_hours.until);
-  const guests = ents["input_boolean.guests_tonight"]?.state === "on" || ents["switch.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_entertain_led"]?.state === "on";
+  const guests = ents["input_boolean.guests_tonight"]?.state === "on" || ents[ENTERTAINING_LED]?.state === "on";
   const lines = [
     `Local time: ${now.toLocaleString("en-US", { timeZone: TZ, weekday: "long", hour: "numeric", minute: "2-digit" })}. ${ents["sun.sun"]?.state === "below_horizon" ? "It is dark outside." : "It is daylight."}`,
     `Protected hours (${k.protected_hours.from} to ${k.protected_hours.until}): ${prot ? "yes, now" : "no"}. Guests expected tonight: ${guests ? "yes" : "no"}.`,

@@ -75,9 +75,11 @@ How to behave:
 - "Cozy" or "movie" means lights to about 30% and shades closed. "Bright" means 100%.
 - Lights marked colour-capable in the house list take colours (set_color): the Living Room Accent Wall and Cove, and
   the front door and garage lights; everything else is white light, warm to cool
-  (set_color_temp, 1800K candle to 4000K bright). The Kitchen keypad moods Entertain, Accent, Night and Shades
-  cover the open-plan first floor; use set_mood for them.
-- Whole-house moods are scenes: Welcome, Day, Night, Away. Use set_scene for "goodnight", "we're leaving",
+  (set_color_temp, 1800K candle to 4000K bright). The keypad moods cover the open-plan first floor; use set_mood
+  for them: bright, entertain, night and off (Great Room), movie, warm and accent (Living Room), and shades,
+  which opens or closes every shade that lights the first floor (it toggles, so check the shades first).
+- Whole-house scenes: Welcome, and All off (every light in the house off, shades untouched). Use set_scene
+  all_off for "goodnight", "we're leaving", "turn everything off"; set_scene welcome for
   "we're home".
 - If something is not in the house list, say so plainly. Never invent devices.
 - The Living Room shade covers the porch door: never set it partway, only fully open or closed. Halfway requests skip it.
@@ -122,7 +124,7 @@ export function tools(person: Person) {
   const setScene = betaZodTool({
     name: "set_scene",
     description: "Run a whole-house scene from the Lutron system.",
-    inputSchema: z.object({ scene: z.enum(["welcome", "day", "night", "away"]) }),
+    inputSchema: z.object({ scene: z.enum(["welcome", "all_off"]) }),
     run: async ({ scene }) => {
       await hub().press(SCENES[scene].entity);
       note(`scene ${SCENES[scene].label}`);
@@ -132,8 +134,8 @@ export function tools(person: Person) {
 
   const setMood = betaZodTool({
     name: "set_mood",
-    description: "Run one of the Kitchen keypad moods for the open-plan first floor (living room, kitchen, dining, breakfast, foyer).",
-    inputSchema: z.object({ mood: z.enum(["entertain", "accent", "night", "shades"]) }),
+    description: "Run one of the keypad moods for the open-plan first floor (living room, kitchen, dining, breakfast, foyer).",
+    inputSchema: z.object({ mood: z.enum(["bright", "entertain", "night", "off", "movie", "warm", "accent", "shades"]) }),
     run: async ({ mood }) => {
       await hub().press(ENTERTAIN.moods[mood].entity);
       note(`mood ${ENTERTAIN.moods[mood].label}`);

@@ -19,7 +19,7 @@ Speech recognition sometimes mangles names: "Leanne", "Lee-am" and "Liam's" mean
 "Rear" mean Riya; "Pratima" may arrive garbled; "Teddy" may arrive as "Teddie", "Ted", "Teddy bear" or
 "Daddy". Nobody in the house is called Jarvis any more; treat "Jarvis", "Travis" or "Jervis" as Teddy.
 
-Whole-house scenes Welcome, Day, Night and Away are the Foyer keypad buttons. The Living Room shade
+Whole-house scenes are Welcome and All off (the Foyer keypad's Welcome and Away buttons; All off turns off every light and leaves the shades alone, and is what "goodnight" means). The Living Room shade
 covers a door and only goes fully open or fully closed, never partway. Shades elsewhere can be set to
 any position.
 

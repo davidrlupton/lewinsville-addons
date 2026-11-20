@@ -75,23 +75,32 @@ export function partialAllowed(entity_id: string, position: number) {
   return !(NO_PARTIAL_COVERS.has(entity_id) && position > 0 && position < 100);
 }
 
-// The Entertain area: the open-plan first floor where the family actually lives. Its moods are the four
-// buttons on the Kitchen "At Column" keypad, programmed in Lutron, so the app and the wall agree.
+// The Entertain area: the open-plan first floor where the family actually lives. Its moods are keypad buttons
+// programmed in Lutron, so the app and the wall agree. Home Assistant named the button entities when the keypads
+// were first imported (2026-10-24) and never renames them, so the ids below carry the OLD engravings; what each
+// button does today (Designer, 2026-11-19) is the label. Kitchen "At Column" keypad 3 reads Bright / Entertain /
+// Night / Off; the Living Room column has White, Warm and Media keypads.
 export const ENTERTAIN = {
   rooms: ["Living Room", "Kitchen", "Dining Room", "Breakfast Room", "Foyer"],
   moods: {
-    entertain: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_entertain", label: "Entertain" },
-    accent: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_accent", label: "Accent" },
-    night: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_night", label: "Night" },
-    shades: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_shades", label: "Shades" },
+    bright: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_entertain", label: "Bright" },        // button 1
+    entertain: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_accent", label: "Entertain" },     // button 2
+    night: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_night", label: "Night" },              // button 3
+    off: { entity: "button.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_shades", label: "Off" },                 // button 4, the Great Room Off scene
+    movie: { entity: "button.first_floor_living_room_first_floor_living_room_at_column_position_3_keypad_button_1", label: "Movie" },
+    warm: { entity: "button.first_floor_living_room_first_floor_living_room_at_column_position_2_keypad_button_1", label: "Warm" },
+    accent: { entity: "button.first_floor_living_room_first_floor_living_room_at_column_position_3_keypad_button_3", label: "Accent" },
+    shades: { entity: "button.first_floor_living_room_first_floor_living_room_at_column_position_3_keypad_button_4", label: "Shades" }, // every shade that lights the first floor: open, stop, close, stop
   } as Record<string, { entity: string; label: string }>,
 };
+/** The LED of the Kitchen keypad's Entertain button (button 2): on while the family is entertaining. */
+export const ENTERTAINING_LED = "switch.first_floor_kitchen_first_floor_kitchen_at_column_position_3_keypad_accent_led";
 export function supportsColor(d: Device) { return ((d.attrs.supported_color_modes as string[] | undefined) ?? []).some((m) => m === "hs" || m === "rgb" || m === "xy"); }
 
-// Whole-house scenes are buttons on the Foyer keypad, programmed in Lutron.
+// Whole-house scenes are buttons on the Foyer "House" keypad, programmed in Lutron: Welcome (button 1) and Away
+// (button 4, the shared All Off scene: every light off, shades untouched; the Primary Bedroom's Good Night runs
+// the same scene). Buttons 2 and 3 are Open Shades and Close Shades; the app's Shades card does that itself.
 export const SCENES: Record<string, { entity: string; label: string }> = {
   welcome: { entity: "button.first_floor_foyer_first_floor_foyer_foyer_inside_position_3_keypad_welcome", label: "Welcome" },
-  day: { entity: "button.first_floor_foyer_first_floor_foyer_foyer_inside_position_3_keypad_day", label: "Day" },
-  night: { entity: "button.first_floor_foyer_first_floor_foyer_foyer_inside_position_3_keypad_night", label: "Night" },
-  away: { entity: "button.first_floor_foyer_first_floor_foyer_foyer_inside_position_3_keypad_away", label: "Away" },
+  all_off: { entity: "button.first_floor_foyer_first_floor_foyer_foyer_inside_position_3_keypad_away", label: "All off" },
 };
